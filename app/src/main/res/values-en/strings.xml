@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Green Guardians</string>
+
+    <string name="nav_missions">Quests</string>
+    <string name="nav_ai">AI Eco</string>
+    <string name="nav_leagues">Leagues &amp; Top</string>
+    <string name="nav_impact">Impact &amp; Shop</string>
+    <string name="nav_profile">Profile</string>
+
+    <string name="toggle_dark">Dark mode</string>
+    <string name="toggle_language">Language</string>
+
+    <string name="total_ep">Total EcoPoints</string>
+    <string name="initial_ep">Quiz EP (self-declared)</string>
+    <string name="verified_ep">Verified EP (quests)</string>
+    <string name="current_league">Current league</string>
+    <string name="ep_to_next">%1$d EP to %2$s</string>
+    <string name="max_league">Max league reached!</string>
+    <string name="verified_co2">Verified CO₂ saved</string>
+    <string name="ice_saved">Arctic ice saved</string>
+    <string name="bears_saved">Polar bears saved</string>
+    <string name="habitat_days">Habitat days secured</string>
+    <string name="coming_soon">Coming soon</string>
+</resources>

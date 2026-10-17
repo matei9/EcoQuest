@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Green Guardians</string>
+
+    <string name="nav_missions">Misiuni</string>
+    <string name="nav_ai">AI Eco</string>
+    <string name="nav_leagues">Ligi &amp; Top</string>
+    <string name="nav_impact">Impact &amp; Shop</string>
+    <string name="nav_profile">Profil</string>
+
+    <string name="toggle_dark">Mod întunecat</string>
+    <string name="toggle_language">Limbă</string>
+
+    <string name="total_ep">EcoPoints totale</string>
+    <string name="initial_ep">EP din quiz (autodeclarate)</string>
+    <string name="verified_ep">EP verificate (misiuni)</string>
+    <string name="current_league">Liga curentă</string>
+    <string name="ep_to_next">%1$d EP până la %2$s</string>
+    <string name="max_league">Ligă maximă atinsă!</string>
+    <string name="verified_co2">CO₂ economisit verificat</string>
+    <string name="ice_saved">Gheață arctică salvată</string>
+    <string name="bears_saved">Urși polari salvați</string>
+    <string name="habitat_days">Zile de habitat asigurate</string>
+    <string name="coming_soon">În curând</string>
+</resources>

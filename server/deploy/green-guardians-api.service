@@ -1,0 +1,24 @@
+[Unit]
+Description=Green Guardians API (port 5200)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=greenguardians
+Group=greenguardians
+WorkingDirectory=/opt/green-guardians/server
+EnvironmentFile=/etc/green-guardians/api.env
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/green-guardians
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+
+# Private configuration and agent workspace files
+.env
+.env.*
+!.env.example
+.agents/
+.codex/
+.aws/
+AGENTS.md
+AGENTS_HANDOFF.md
+docs/changelog/
