@@ -62,14 +62,14 @@ fun LeaguesScreen(vm: MainViewModel, me: Me, onGoMissions: () -> Unit) {
     // together with the previous tab's response.
     val selectedTab = tab
     val selectedVerifiedOnly = verifiedOnly
-    val titles = listOf(L("👤 Individual", "👤 Individual"), L("🤝 Echipe", "🤝 Teams"), L("🎓 Școli", "🎓 Schools"), L("🏙️ Orașe", "🏙️ Cities"), L("⚔️ 1v1", "⚔️ 1v1"))
+    val titles = listOf(L("👤 Individual", "👤 Individual"), L("🤝 Echipe", "🤝 Teams"), L("🏙️ Orașe", "🏙️ Cities"), L("⚔️ 1v1", "⚔️ 1v1"))
     val community by rememberApi(p.verifiedQuestEP) { vm.api.get("/api/community") }
     // Each tab loads from the server; keys refresh it after progress or team changes.
     val data by rememberApi(selectedTab, selectedVerifiedOnly, p.verifiedQuestEP, me.user.teamId, reload) {
         when (selectedTab) {
             0 -> vm.api.get("/api/leaderboard/individual?metric=" + if (selectedVerifiedOnly) "verified" else "total")
             1 -> vm.api.get("/api/teams")
-            else -> JSONObject() // schools / cities load inside rankings()
+            else -> JSONObject() // cities load inside rankings()
         }
     }
     val response = data
@@ -89,8 +89,8 @@ fun LeaguesScreen(vm: MainViewModel, me: Me, onGoMissions: () -> Unit) {
             r.isFailure -> item { ErrorLine(r.exceptionOrNull()!!) }
             selectedTab == 0 -> individual(r.getOrThrow(), selectedVerifiedOnly) { verifiedOnly = it }
             selectedTab == 1 -> teamsTab(vm, me, r.getOrThrow()) { reload++ }
-            selectedTab == 4 -> item { DuelsCard(vm) }
-            else -> rankings(vm, selectedTab)
+            selectedTab == 3 -> item { DuelsCard(vm) }
+            else -> rankings(vm)
         }
     }
 }
@@ -174,32 +174,20 @@ private fun LazyListScope.teamsTab(vm: MainViewModel, me: Me, o: JSONObject, cha
     }
 }
 
-/** Schools and cities endpoints return JSON arrays. */
-private fun LazyListScope.rankings(vm: MainViewModel, tab: Int) {
+/** City rankings use the normalized active-participant score. */
+private fun LazyListScope.rankings(vm: MainViewModel) {
     item {
-        val rows by rememberApi(tab) {
-            val path = if (tab == 2) "/api/leaderboard/schools" else "/api/leaderboard/cities"
-            Json.objects(vm.api.getArray(path))
-        }
+        val rows by rememberApi(Unit) { Json.objects(vm.api.getArray("/api/leaderboard/cities")) }
         val r = rows
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (tab == 3) {
-                Text(
-                    L("Scor normalizat per participant activ (medie EP și kg CO₂) — competiție echitabilă.", "Score normalized per active participant (avg EP and kg CO₂) — fair competition.").t(),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            Text(
+                L("Scor normalizat per participant activ (medie EP și kg CO₂) — competiție echitabilă.", "Score normalized per active participant (avg EP and kg CO₂) — fair competition.").t(),
+                style = MaterialTheme.typography.bodySmall,
+            )
             when {
                 r == null -> CircularProgressIndicator()
                 r.isFailure -> ErrorLine(r.exceptionOrNull()!!)
                 r.getOrThrow().isEmpty() -> Text(L("Încă nu există date.", "No data yet.").t())
-                tab == 2 -> r.getOrThrow().forEachIndexed { i, s ->
-                    RowCard(
-                        "#${i + 1}  ${s.getString("name")}",
-                        L("${s.getInt("users")} participanți · medie ${fmt(s.getInt("avgEP"))} EP", "${s.getInt("users")} participants · avg ${fmt(s.getInt("avgEP"))} EP").t(),
-                        "${fmt(s.getInt("totalEP"))} EP",
-                    )
-                }
                 else -> r.getOrThrow().forEachIndexed { i, c ->
                     RowCard(
                         "#${i + 1}  ${c.getString("name")}",

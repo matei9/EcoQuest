@@ -73,7 +73,7 @@ fun ProfileScreen(vm: MainViewModel, me: Me) {
         item {
             Column {
                 Text("👤 ${u.name}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("${u.email} · ${u.city}" + (u.school?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall)
+                Text("${u.email} · ${u.city}", style = MaterialTheme.typography.bodySmall)
                 Text(
                     L("Cod invitație prieteni: ${u.refCode}", "Friend invite code: ${u.refCode}").t(),
                     color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold,

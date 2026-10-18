@@ -48,7 +48,6 @@ fun AuthScreen(vm: MainViewModel) {
     var password by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("Iași") }
-    var school by remember { mutableStateOf<String?>(null) }
     var refCode by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
@@ -80,10 +79,6 @@ fun AuthScreen(vm: MainViewModel) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 cfg.cities.forEach { c -> FilterChip(city == c, { city = c }, { Text(c) }) }
             }
-            Text(L("Școală / universitate (opțional)", "School / university (optional)").t())
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                cfg.schools.forEach { s -> FilterChip(school == s, { school = if (school == s) null else s }, { Text(s) }) }
-            }
             OutlinedTextField(refCode, { refCode = it }, Modifier.fillMaxWidth(), label = { Text(L("Cod invitație (opțional)", "Invite code (optional)").t()) }, singleLine = true)
         }
         error?.let { ErrorLine(it) }
@@ -95,7 +90,7 @@ fun AuthScreen(vm: MainViewModel) {
                 error = null
                 scope.launch {
                     runCatching {
-                        if (signup) vm.signup(email.trim(), password, name.trim(), city, school, refCode)
+                        if (signup) vm.signup(email.trim(), password, name.trim(), city, refCode)
                         else vm.login(email.trim(), password)
                     }.onFailure { error = it }
                     busy = false

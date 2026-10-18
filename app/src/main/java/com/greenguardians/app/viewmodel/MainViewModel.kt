@@ -162,10 +162,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    suspend fun signup(email: String, password: String, name: String, city: String, school: String?, refCode: String?) {
+    suspend fun signup(email: String, password: String, name: String, city: String, refCode: String?) {
         val body = JSONObject()
             .put("email", email).put("password", password).put("name", name).put("city", city)
-            .put("school", school ?: JSONObject.NULL)
         if (!refCode.isNullOrBlank()) body.put("refCode", refCode.trim())
         val r = api.post("/api/auth/signup", body)
         repo.saveSession(r.getString("token"), r.toString())

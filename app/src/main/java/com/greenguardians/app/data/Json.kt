@@ -11,7 +11,6 @@ import org.json.JSONObject
 /** Parsers for server JSON (shapes defined in server/src/progress.js `me()`). */
 object Json {
     private fun JSONArray.strings() = (0 until length()).map { getString(it) }
-    private fun JSONObject.optStr(k: String) = if (isNull(k)) null else optString(k)
 
     fun me(o: JSONObject): Me {
         val u = o.getJSONObject("user")
@@ -24,7 +23,6 @@ object Json {
                 email = u.getString("email"),
                 name = u.getString("name"),
                 city = u.getString("city"),
-                school = u.optStr("school"),
                 teamId = if (u.isNull("teamId")) null else u.getInt("teamId"),
                 refCode = u.getString("refCode"),
                 locality = u.optString("locality", "urban"),
@@ -59,7 +57,6 @@ object Json {
         aiEnabled = o.optBoolean("aiEnabled"),
         transitEnabled = o.optBoolean("transitEnabled"),
         cities = o.getJSONArray("cities").strings(),
-        schools = o.getJSONArray("schools").strings(),
     )
 
     fun objects(a: JSONArray): List<JSONObject> = (0 until a.length()).map { a.getJSONObject(it) }

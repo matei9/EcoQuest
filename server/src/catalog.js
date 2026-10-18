@@ -97,7 +97,6 @@ export function leagueRange(totalEP) {
 }
 
 export const CITIES = ['Iași', 'Suceava', 'Bacău', 'Altul'];
-export const SCHOOLS = ['UAIC Iași', 'TUIASI (Politehnica Iași)', 'USV Suceava', 'Universitatea „Vasile Alecsandri” Bacău', 'Colegiul Național Iași'];
 
 export const vouchers = [
   { id: 'coffee', cost: 150, title: '20% reducere cafea (recipient reutilizabil)', partner: 'Cafenea Specialty Iași' },

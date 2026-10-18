@@ -3,7 +3,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import { aiEnabled, chat, streamChat } from './ai.js';
-import { CITIES, SCHOOLS, leagueRange, questById, scoreQuiz, vouchers } from './catalog.js';
+import { CITIES, leagueRange, questById, scoreQuiz, vouchers } from './catalog.js';
 import { config } from './config.js';
 import { tx } from './db.js';
 import { analyzeTrack, haversineKm, validPoint } from './geo.js';
@@ -67,22 +67,21 @@ export function createApp(db, { receiptOcr = readReceiptImage, now = Date.now } 
 
   r.get('/health', (_req, res) => res.json({ ok: true }));
   r.get('/config', (_req, res) =>
-    res.json({ demoMode: config.demoMode, aiEnabled: aiEnabled(), transitEnabled: transitEnabled(), receiptOcr: 'server-v1', receiptValidation: 'datetime-v2', cities: CITIES, schools: SCHOOLS }));
+    res.json({ demoMode: config.demoMode, aiEnabled: aiEnabled(), transitEnabled: transitEnabled(), receiptOcr: 'server-v1', receiptValidation: 'datetime-v2', cities: CITIES, schools: [] }));
 
   // ---------- auth ----------
   r.post('/auth/signup', authLimit, (req, res) => {
-    const { email, password, name, city, school, refCode } = req.body ?? {};
+    const { email, password, name, city, refCode } = req.body ?? {};
     if (!str(email, 3, 120) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) fail(400, 'invalid_email');
     if (typeof password !== 'string' || password.length < 8 || password.length > 200) fail(400, 'weak_password');
     if (!str(name, 2, 40)) fail(400, 'invalid_name');
     if (!CITIES.includes(city)) fail(400, 'invalid_city');
-    if (school != null && !SCHOOLS.includes(school)) fail(400, 'invalid_school');
     const referrer = refCode ? db.prepare('SELECT id FROM users WHERE ref_code = ?').get(String(refCode).toUpperCase()) : null;
     if (refCode && !referrer) fail(400, 'invalid_ref_code');
     if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email.trim())) fail(409, 'email_taken');
     const { lastInsertRowid } = db.prepare(
       'INSERT INTO users (email, pass, name, city, school, ref_code, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run(email.trim(), hashPassword(password), name.trim(), city, school ?? null, randomBytes(4).toString('hex').toUpperCase(), referrer?.id ?? null);
+    ).run(email.trim(), hashPassword(password), name.trim(), city, null, randomBytes(4).toString('hex').toUpperCase(), referrer?.id ?? null);
     const uid = Number(lastInsertRowid);
     res.status(201).json({ token: signSession(uid), ...me(db, uid) });
   });
@@ -289,13 +288,6 @@ export function createApp(db, { receiptOcr = readReceiptImage, now = Date.now } 
        WHERE ${TOTAL} >= ? AND ${TOTAL} < ? ORDER BY ${col} DESC, id LIMIT 50`,
     ).all(lg.min, lg.max);
     res.json({ league: lg.name, players: rows.map((p) => ({ ...p, isYou: p.id === req.uid })) });
-  });
-
-  r.get('/leaderboard/schools', auth, (_req, res) => {
-    res.json(db.prepare(
-      `SELECT school AS name, COUNT(*) AS users, SUM(${TOTAL}) AS totalEP, CAST(AVG(${TOTAL}) AS INTEGER) AS avgEP
-       FROM users WHERE school IS NOT NULL GROUP BY school ORDER BY totalEP DESC`,
-    ).all());
   });
 
   // Normalized by active participants (verified EP > 0) so small cities compete fairly.

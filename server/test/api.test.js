@@ -59,6 +59,10 @@ test('signup, quiz, quests, receipts, leaderboard, vouchers', async () => {
   r = await call('POST', '/auth/signup', { email: 'a@b.ro', password: 'parola-buna', name: 'Ana', city: 'Iași', school: 'UAIC Iași' });
   assert.equal(r.status, 201);
   const token = r.body.token;
+  assert.equal(Object.hasOwn(r.body.user, 'school'), false);
+  assert.equal(db.prepare('SELECT school FROM users WHERE id = ?').get(r.body.user.id).school, null);
+  assert.deepEqual((await call('GET', '/config')).body.schools, []);
+  assert.equal((await call('GET', '/leaderboard/schools', null, token)).status, 404);
   assert.equal(r.body.progress.verifiedCO2SavedKg, 0);
 
   r = await call('POST', '/auth/login', { email: 'a@b.ro', password: 'gresit-gresit' });

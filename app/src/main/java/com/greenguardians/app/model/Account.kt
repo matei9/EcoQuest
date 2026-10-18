@@ -5,7 +5,6 @@ data class UserInfo(
     val email: String,
     val name: String,
     val city: String,
-    val school: String?,
     val teamId: Int?,
     val refCode: String,
     val locality: String = "urban",
@@ -22,5 +21,4 @@ data class AppConfig(
     val aiEnabled: Boolean = false,
     val transitEnabled: Boolean = false,
     val cities: List<String> = listOf("Iași", "Suceava", "Bacău", "Altul"),
-    val schools: List<String> = emptyList(),
 )

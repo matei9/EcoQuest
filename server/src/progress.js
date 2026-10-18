@@ -82,7 +82,7 @@ export function me(db, uid, day = today()) {
   }
   return {
     user: {
-      id: u.id, email: u.email, name: u.name, city: u.city, school: u.school,
+      id: u.id, email: u.email, name: u.name, city: u.city,
       teamId: u.team_id, refCode: u.ref_code,
       locality: u.locality, publicTransport: !!u.public_transport,
     },
