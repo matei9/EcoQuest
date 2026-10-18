@@ -13,7 +13,7 @@ import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.greenguardians.app.ui.AppNav
 import com.greenguardians.app.ui.LocalIsEn
-import com.greenguardians.app.ui.theme.GreenGuardiansTheme
+import com.greenguardians.app.ui.theme.EcoQuestTheme
 import com.greenguardians.app.viewmodel.MainViewModel
 
 class MainActivity : AppCompatActivity() {
@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val dark = vm.darkMode.collectAsStateWithLifecycle().value
             val monet = vm.monetColors.collectAsStateWithLifecycle().value
-            GreenGuardiansTheme(darkMode = dark, monetColors = monet) {
+            EcoQuestTheme(darkMode = dark, monetColors = monet) {
                 CompositionLocalProvider(LocalIsEn provides isEn) {
                     Surface(Modifier.fillMaxSize()) { AppNav(vm) }
                 }

@@ -195,7 +195,7 @@ fun VerifySheet(vm: MainViewModel, quest: Quest, p: UserProgress, onDismiss: () 
 
             if (busy) {
                 Text(if (quest.sgr > 0) L("Serverul citește bonul. Poate dura câteva secunde...", "The server is reading your receipt. This may take a few seconds...").t()
-                    else L("Green Guardians analizează dovada pe telefon...", "Green Guardians is analyzing the proof on your phone...").t())
+                    else L("EcoQuest analizează dovada pe telefon...", "EcoQuest is analyzing the proof on your phone...").t())
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             error?.let { if ((it as? ApiException)?.code != "cancelled") ErrorLine(it) }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Green Guardians API installer for Ubuntu 24.04.
+# EcoQuest API installer for Ubuntu 24.04.
 # Usage (as root, from the repo's server/ directory):
 #   sudo DOMAIN=api.exemplu.ro EMAIL=admin@exemplu.ro bash deploy/install.sh
 # Re-running it updates the code and restarts the service (keeps DB and env).

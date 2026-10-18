@@ -62,7 +62,7 @@ fun QuizScreen(vm: MainViewModel) {
 
     Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("🌱 Green Guardians", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Text("🌱 EcoQuest", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             LangDarkToggles(vm)
         }
         Spacer(Modifier.height(8.dp))

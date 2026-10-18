@@ -1,5 +1,5 @@
 [Unit]
-Description=Green Guardians API (port 5200)
+Description=EcoQuest API (port 5200)
 After=network-online.target
 Wants=network-online.target
 

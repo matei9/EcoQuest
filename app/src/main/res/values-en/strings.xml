@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Green Guardians</string>
+    <string name="app_name">EcoQuest</string>
     <string name="trip_channel">GPS trip</string>
-    <string name="trip_recording">Green Guardians is recording your trip</string>
+    <string name="trip_recording">EcoQuest is recording your trip</string>
     <string name="trip_distance">Distance: %1$.2f km · Open the quest to submit</string>
     <string name="trip_stop_save">Stop and keep trip</string>
 

@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Green Guardians"
+rootProject.name = "EcoQuest"
 include(":app")

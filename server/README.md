@@ -1,4 +1,4 @@
-# Green Guardians API
+# EcoQuest API
 
 Node.js 24 + Express 5 + SQLite (`node:sqlite`, no native deps). Listens on **127.0.0.1:5200**; nginx terminates HTTPS on the domain and proxies `/api/` to it.
 
@@ -120,3 +120,5 @@ All endpoints require a session token:
 The mystery quest now validates an SGR receipt rather than collection-point image labels. Only a calendar-valid printed date/time is required. Missing quantity is stored as zero; optional `count` must be 1–200 when provided. Duplicate protection applies only to accepted receipts (including historical receipt hashes), globally by image and printed timestamp. Rejected attempts do not reserve either key. Unrelated photo-proof hashes do not block receipt uploads. Update both backend and Android app for this policy; the new app checks the `datetime-v2` capability.
 
 School/university selection and the schools leaderboard have been removed. Signups no longer store school input, the profile no longer returns it, and `/leaderboard/schools` is unavailable. `/config.schools` remains an empty array for older-client compatibility. The legacy nullable SQLite column is retained so existing databases can upgrade without a destructive schema change.
+
+EcoQuest retains the existing Android application ID, local preference keys, server service/user names and database paths for installation/data compatibility. These legacy internal identifiers are not the displayed product name.

@@ -44,7 +44,7 @@ import androidx.core.content.FileProvider
 import com.greenguardians.app.model.L
 import com.greenguardians.app.ui.LocalIsEn
 import com.greenguardians.app.ui.t
-import com.greenguardians.app.ui.theme.GreenGuardiansTheme
+import com.greenguardians.app.ui.theme.EcoQuestTheme
 import java.io.File
 
 /** In-app camera: does not depend on a system IMAGE_CAPTURE activity being installed. */
@@ -53,7 +53,7 @@ class ProofCameraActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val en = AppCompatDelegate.getApplicationLocales().toLanguageTags().startsWith("en")
         setContent {
-            GreenGuardiansTheme {
+            EcoQuestTheme {
                 CompositionLocalProvider(LocalIsEn provides en) {
                     var granted by remember { mutableStateOf(ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
                     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }

@@ -50,7 +50,7 @@ private val LightColors = lightColorScheme(
 
 /** darkMode null = follow system. */
 @Composable
-fun GreenGuardiansTheme(darkMode: Boolean? = null, monetColors: Boolean = false, content: @Composable () -> Unit) {
+fun EcoQuestTheme(darkMode: Boolean? = null, monetColors: Boolean = false, content: @Composable () -> Unit) {
     val dark = darkMode ?: isSystemInDarkTheme()
     val context = LocalContext.current
     val colors = if (monetColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

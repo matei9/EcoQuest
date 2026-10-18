@@ -70,8 +70,8 @@ fun FriendsCard(vm: MainViewModel, me: Me, changed: () -> Unit) {
             Text(L("Prieteni și invitații", "Friends and invitations").t(), style = MaterialTheme.typography.titleMedium)
             SelectionContainer { Text(L("Codul tău: ${me.user.refCode}", "Your code: ${me.user.refCode}").t()) }
             val shareText = L(
-                "Adaugă-mă la prieteni în Green Guardians! Codul meu: ${me.user.refCode}. Îl introduci în Ligi → Echipe → Prieteni și invitații.",
-                "Add me as a friend in Green Guardians! My code: ${me.user.refCode}. Enter it in Leagues → Teams → Friends and invitations.",
+                "Adaugă-mă la prieteni în EcoQuest! Codul meu: ${me.user.refCode}. Îl introduci în Ligi → Echipe → Prieteni și invitații.",
+                "Add me as a friend in EcoQuest! My code: ${me.user.refCode}. Enter it in Leagues → Teams → Friends and invitations.",
             ).t()
             OutlinedButton(onClick = {
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {

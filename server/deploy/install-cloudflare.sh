@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Green Guardians API on Ubuntu 24.04 behind Cloudflare DNS proxy (TLS is done by Cloudflare).
+# EcoQuest API on Ubuntu 24.04 behind Cloudflare DNS proxy (TLS is done by Cloudflare).
 # Node listens on 0.0.0.0:5200. The firewall is NOT touched: restrict 5200 to Cloudflare IPs yourself.
 # Usage (as root, from the repo's server/ directory):
 #   sudo bash deploy/install-cloudflare.sh

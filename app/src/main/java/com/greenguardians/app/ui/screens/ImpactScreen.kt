@@ -89,7 +89,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.impact(vm: MainViewMo
         val bearNo = p.polarBearsSaved.toInt() + 1
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0B2A3A))) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("❄️ " + L("Sanctuarul Arctic Green Guardians", "Green Guardians Arctic Sanctuary").t(), color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text("❄️ " + L("Sanctuarul Arctic EcoQuest", "EcoQuest Arctic Sanctuary").t(), color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 Text("%.2f ".format(p.polarBearsSaved) + L("Urși Polari Salvați 🐻‍❄️", "Polar Bears Saved 🐻‍❄️").t(), color = Color.White, style = MaterialTheme.typography.headlineSmall)
                 LinearProgressIndicator(progress = { anim }, Modifier.fillMaxWidth(), color = Color(0xFF7DD3FC))
                 Text("Nanuq #$bearNo · ${(p.polarBearProgress * 100).toInt()}%", color = Color(0xFFBAE6FD))
@@ -113,13 +113,13 @@ private fun androidx.compose.foundation.lazy.LazyListScope.impact(vm: MainViewMo
         val c = community?.getOrNull()
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(L("Comunitatea Green Guardians (Moldova)", "Green Guardians community (Moldova)").t(), fontWeight = FontWeight.Bold)
+                Text(L("Comunitatea EcoQuest (Moldova)", "EcoQuest community (Moldova)").t(), fontWeight = FontWeight.Bold)
                 if (c == null) {
                     community?.exceptionOrNull()?.let { ErrorLine(it) } ?: CircularProgressIndicator()
                 } else {
                     Text("%.1f ".format(c.getDouble("polarBears")) + L("Urși Polari Salvați împreună", "Polar Bears Saved together").t())
                     Text("%.2f m² ".format(c.getDouble("iceM2")) + L("de gheață arctică protejată", "of Arctic ice protected").t())
-                    Text(L("${c.getInt("users")} Green Guardians", "${c.getInt("users")} Green Guardians").t(), style = MaterialTheme.typography.bodySmall)
+                    Text(L("${c.getInt("users")} membri EcoQuest", "${c.getInt("users")} EcoQuest members").t(), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -138,8 +138,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.impact(vm: MainViewMo
     item {
         Text(
             L(
-                "Obiceiurile tale anterioare ți-au oferit punctele de start în Ligă (initialSelfDeclaredEP), iar acest dashboard măsoară exclusiv CO₂-ul suplimentar economisit prin misiunile tale verificate în Green Guardians.",
-                "Your previous habits gave you your starting points in the League (initialSelfDeclaredEP), while this dashboard measures only the additional CO₂ saved through your verified Green Guardians quests.",
+                "Obiceiurile tale anterioare ți-au oferit punctele de start în Ligă (initialSelfDeclaredEP), iar acest dashboard măsoară exclusiv CO₂-ul suplimentar economisit prin misiunile tale verificate în EcoQuest.",
+                "Your previous habits gave you your starting points in the League (initialSelfDeclaredEP), while this dashboard measures only the additional CO₂ saved through your verified EcoQuest quests.",
             ).t(),
             style = MaterialTheme.typography.bodySmall,
         )

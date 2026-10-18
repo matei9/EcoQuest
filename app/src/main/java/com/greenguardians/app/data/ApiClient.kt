@@ -19,7 +19,7 @@ private fun networkError(e: IOException): ApiException {
     return ApiException("network", 0, "${e.javaClass.simpleName}: ${e.message}")
 }
 
-/** Minimal JSON-over-HTTPS client for the Green Guardians API (see server/README). */
+/** Minimal JSON-over-HTTPS client for the EcoQuest API (see server/README). */
 class ApiClient(private val baseUrl: String, private val token: () -> String?) {
 
     suspend fun call(method: String, path: String, body: JSONObject? = null, timeoutMs: Int = 15_000): JSONObject =

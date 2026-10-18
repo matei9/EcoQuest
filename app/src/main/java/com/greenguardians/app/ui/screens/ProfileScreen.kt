@@ -88,8 +88,8 @@ fun ProfileScreen(vm: MainViewModel, me: Me) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(L("Culorile telefonului (Monet)", "Phone colors (Monet)").t(), fontWeight = FontWeight.SemiBold)
-                    Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) L("Oprit: verde Green Guardians. Pornit: paleta sistemului.", "Off: Green Guardians green. On: system palette.").t()
-                        else L("Disponibil de la Android 12. Folosim verdele Green Guardians.", "Available on Android 12+. Using Green Guardians green.").t(), style = MaterialTheme.typography.bodySmall)
+                    Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) L("Oprit: verde EcoQuest. Pornit: paleta sistemului.", "Off: EcoQuest green. On: system palette.").t()
+                        else L("Disponibil de la Android 12. Folosim verdele EcoQuest.", "Available on Android 12+. Using EcoQuest green.").t(), style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(checked = monet, onCheckedChange = vm::setMonetColors, enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             }

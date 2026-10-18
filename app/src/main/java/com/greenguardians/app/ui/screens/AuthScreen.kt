@@ -57,7 +57,7 @@ fun AuthScreen(vm: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("🌱 Green Guardians", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            Text("🌱 EcoQuest", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             LangDarkToggles(vm)
         }
         Text(

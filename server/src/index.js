@@ -4,7 +4,7 @@ import { openDb } from './db.js';
 
 const db = openDb(config.dbPath);
 const server = createApp(db).listen(config.port, config.host, () => {
-  console.log(`Green Guardians API on http://${config.host}:${config.port} (demo=${config.demoMode})`);
+  console.log(`EcoQuest API on http://${config.host}:${config.port} (demo=${config.demoMode})`);
 });
 
 const stop = () => server.close(() => { db.close(); process.exit(0); });
