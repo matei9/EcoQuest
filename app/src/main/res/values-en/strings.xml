@@ -9,8 +9,8 @@
     <string name="nav_missions">Quests</string>
     <string name="nav_tree">Tree</string>
     <string name="nav_ai">AI Eco</string>
-    <string name="nav_leagues">Leagues &amp; Top</string>
-    <string name="nav_impact">Impact &amp; Shop</string>
+    <string name="nav_leagues">Leagues</string>
+    <string name="nav_impact">Impact</string>
     <string name="nav_profile">Profile</string>
 
     <string name="toggle_dark">Dark mode</string>

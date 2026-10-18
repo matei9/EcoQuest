@@ -97,6 +97,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.impact(vm: MainViewMo
                     L("🧊 Gheață arctică salvată: %.1f cm² (%.4f m²)".format(p.arcticIceSavedCm2, p.arcticIceSavedM2), "🧊 Arctic ice saved: %.1f cm² (%.4f m²)".format(p.arcticIceSavedCm2, p.arcticIceSavedM2)).t(),
                     color = Color.White,
                 )
+                Text(L("≈ %.1f cuburi de gheață, cu latura de 3 cm".format(p.iceCubeFaceEquivalents),
+                    "≈ %.1f ice cubes with 3 cm sides".format(p.iceCubeFaceEquivalents)).t(), color = Color(0xFFBAE6FD), fontWeight = FontWeight.Bold)
+                Text(L("Echivalent vizual: numărăm fețe de 3 × 3 cm (9 cm²). Suprafața salvată nu ne spune volumul gheții.",
+                    "Visual equivalent: we count 3 × 3 cm faces (9 cm²). Saved surface area does not measure ice volume.").t(), color = Color(0xFFBAE6FD), style = MaterialTheme.typography.bodySmall)
                 Text(
                     L("🍽️ Zile de vânătoare și hrănire asigurate: %.1f".format(p.habitatDays), "🍽️ Hunting & feeding days secured: %.1f".format(p.habitatDays)).t(),
                     color = Color.White,

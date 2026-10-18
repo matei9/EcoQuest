@@ -53,6 +53,8 @@ data class UserProgress(
 
     val arcticIceSavedM2: Double get() = verifiedCO2SavedKg * Impact.ICE_M2_PER_KG
     val arcticIceSavedCm2: Double get() = verifiedCO2SavedKg * 30.0
+    /** Visual equivalence of 3×3 cm cube faces; area alone does not measure ice volume. */
+    val iceCubeFaceEquivalents: Double get() = arcticIceSavedCm2 / 9.0
     val polarBearsSaved: Double get() = verifiedCO2SavedKg / Impact.KG_PER_BEAR
     val polarBearProgress: Float get() = (polarBearsSaved % 1.0).toFloat()
     val habitatDays: Double get() = verifiedCO2SavedKg / Impact.KG_PER_HABITAT_DAY

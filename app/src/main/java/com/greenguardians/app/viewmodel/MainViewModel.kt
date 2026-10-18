@@ -31,6 +31,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import org.json.JSONArray
 import org.json.JSONObject
+import com.greenguardians.app.model.AiConversation
+import com.greenguardians.app.model.AiMessage
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 
 /** Active CTP ride: issued by the server when a vehicle of the route was next to the user. */
 data class Boarding(val token: String, val routeName: String)
@@ -44,6 +48,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val progress: StateFlow<UserProgress> =
         session.map { it.me?.progress ?: UserProgress() }.stateIn(viewModelScope, SharingStarted.Eagerly, UserProgress())
     val darkMode: StateFlow<Boolean?> = repo.darkMode.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val monetColors = repo.monetColors.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val _conversation = MutableStateFlow(AiConversation())
+    val conversation: StateFlow<AiConversation> = _conversation
+    private var chatJob: Job? = null
+    private var chatGeneration = 0L
 
     val config = MutableStateFlow(AppConfig())
     val boarding = MutableStateFlow<Boarding?>(null)
@@ -66,6 +75,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     stopTrip()
                     trips.bindOwner(owner)
                 }
+                if (owner != null && owner != _conversation.value.ownerId) clearConversation(owner.takeIf { it > 0 })
             }
         }
         viewModelScope.launch {
@@ -77,6 +87,57 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setDarkMode(dark: Boolean) {
         viewModelScope.launch { repo.setDarkMode(dark) }
+    }
+    fun setMonetColors(enabled: Boolean) {
+        viewModelScope.launch { repo.setMonetColors(enabled) }
+    }
+
+    private fun clearConversation(owner: Int? = null) {
+        chatGeneration++
+        chatJob?.cancel()
+        chatJob = null
+        _conversation.value = AiConversation(ownerId = owner)
+    }
+
+    fun setAiDraft(text: String) {
+        val owner = session.value.me?.user?.id ?: return
+        if (_conversation.value.ownerId != owner) clearConversation(owner)
+        _conversation.value = _conversation.value.copy(draft = text.take(4000))
+    }
+
+    /** Session memory belongs to the activity ViewModel, not the navigation destination. */
+    fun sendAi(text: String, en: Boolean, fallback: String) {
+        val owner = session.value.me?.user?.id ?: return
+        if (_conversation.value.ownerId != owner) clearConversation(owner)
+        val current = _conversation.value
+        if (text.isBlank() || current.busy) return
+        val messages = current.messages + AiMessage(true, text.take(4000))
+        val history = messages.takeLast(10).map { it.fromUser to it.text }
+        _conversation.value = current.copy(messages = messages + AiMessage(false, ""), draft = "", busy = true, thinking = false)
+        val generation = ++chatGeneration
+        chatJob = viewModelScope.launch {
+            val answer = StringBuilder()
+            fun update(text: String) {
+                val state = _conversation.value
+                if (state.ownerId == owner && generation == chatGeneration) _conversation.value = state.copy(messages = state.messages.dropLast(1) + AiMessage(false, text))
+            }
+            try {
+                aiStream(history, if (en) "en" else "ro").collect { event ->
+                    if (_conversation.value.ownerId != owner || generation != chatGeneration) return@collect
+                    when(event.optString("type")) {
+                        "thinking" -> _conversation.value = _conversation.value.copy(thinking = true)
+                        "delta" -> { answer.append(event.getString("text")); update(answer.toString()) }
+                        "error" -> throw ApiException(event.optString("error", "ai_failed"), 0)
+                    }
+                }
+                if (answer.isEmpty()) throw ApiException("ai_failed", 0)
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                update(if (answer.isEmpty()) fallback + if (en) "\n\n(offline mode)" else "\n\n(mod offline)" else "$answer …")
+            } finally {
+                if (_conversation.value.ownerId == owner && generation == chatGeneration) _conversation.value = _conversation.value.copy(busy = false, thinking = false)
+            }
+        }
     }
 
     /** RO is the default; AppCompat persists the locale and recreates the activity. */
@@ -116,12 +177,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun logout() {
+        clearConversation()
         discardTrip()
         viewModelScope.launch { repo.clearSession() }
     }
 
     suspend fun deleteAccount() {
         api.call("DELETE", "/api/me")
+        clearConversation()
         discardTrip()
         repo.clearSession()
     }

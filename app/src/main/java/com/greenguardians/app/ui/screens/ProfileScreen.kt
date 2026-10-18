@@ -24,6 +24,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.os.Build
 import com.greenguardians.app.model.Me
 import com.greenguardians.app.ui.ErrorLine
 import kotlinx.coroutines.launch
@@ -65,6 +68,7 @@ fun ProfileScreen(vm: MainViewModel, me: Me) {
     var confirmDelete by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
     val scope = rememberCoroutineScope()
+    val monet by vm.monetColors.collectAsStateWithLifecycle()
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Column {
@@ -80,6 +84,14 @@ fun ProfileScreen(vm: MainViewModel, me: Me) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(L("Setări rapide", "Quick settings").t(), Modifier.weight(1f), fontWeight = FontWeight.Bold)
                 LangDarkToggles(vm)
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(L("Culorile telefonului (Monet)", "Phone colors (Monet)").t(), fontWeight = FontWeight.SemiBold)
+                    Text(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) L("Oprit: verde Green Guardians. Pornit: paleta sistemului.", "Off: Green Guardians green. On: system palette.").t()
+                        else L("Disponibil de la Android 12. Folosim verdele Green Guardians.", "Available on Android 12+. Using Green Guardians green.").t(), style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = monet, onCheckedChange = vm::setMonetColors, enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             }
         }
         item { LeaguesShowcaseCard(p.league) }

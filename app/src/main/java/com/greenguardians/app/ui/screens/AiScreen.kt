@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -21,16 +20,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.greenguardians.app.model.AiConversation
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import com.greenguardians.app.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
-import kotlin.coroutines.cancellation.CancellationException
-import com.greenguardians.app.data.ApiException
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -41,7 +34,6 @@ import com.greenguardians.app.ui.LocalIsEn
 import com.greenguardians.app.ui.t
 import java.time.LocalDate
 
-private class Msg(val fromUser: Boolean, val text: String)
 
 private val quickPrompts = listOf(
     L("Câți litri de carburant am economisit?", "How many liters of fuel did I save?"),
@@ -68,7 +60,7 @@ private fun reply(q: String, p: UserProgress, en: Boolean): String {
             "1 kg of CO₂ saved protects 0.003 m² (30 cm²) of Arctic ice. You saved %.1f cm² and %.2f polar bears; at 100 kg CO₂ you save a whole bear. Keep going with green transport quests!".format(p.arcticIceSavedCm2, p.polarBearsSaved),
         )
         listOf("misiun", "quest", "azi", "today").any { it in s } -> {
-            val rec = QuestRepository.recommended(p, LocalDate.now()).firstOrNull()
+            val rec = p.dailyQuestIds.mapNotNull(QuestRepository::byId).firstOrNull { !QuestRepository.isDone(it, p.completedKeys, LocalDate.now()) }
             if (rec == null) r("Ai terminat recomandările de azi. Bravo!", "You finished today's recommendations. Well done!")
             else r("Îți recomand: „${rec.title.ro}” (+${rec.ep} EP, -%.2f kg CO₂).".format(rec.co2Kg), "I recommend: “${rec.title.en}” (+${rec.ep} EP, -%.2f kg CO₂).".format(rec.co2Kg))
         }
@@ -82,59 +74,21 @@ private fun reply(q: String, p: UserProgress, en: Boolean): String {
 @Composable
 fun AiScreen(vm: MainViewModel, p: UserProgress) {
     val en = LocalIsEn.current
-    val msgs = remember { mutableStateListOf<Msg>() }
-    var input by remember { mutableStateOf("") }
+    val stored by vm.conversation.collectAsStateWithLifecycle()
+    val owner = vm.session.collectAsStateWithLifecycle().value.me?.user?.id
+    val conversation = stored.takeIf { it.ownerId == owner } ?: AiConversation()
+    val msgs = conversation.messages
+    val input = conversation.draft
     val listState = rememberLazyListState()
     val greeting = L(
         "Salut! Sunt Guardian AI 🌱 Pentru verificarea cu foto/bon deschide o misiune din tab-ul Misiuni.",
         "Hi! I'm Guardian AI 🌱 To verify with a photo/receipt, open a quest from the Quests tab.",
     ).t()
 
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var modelThinking by remember { mutableStateOf(false) }
-    // Shown from the moment the question is sent; models often think for a while before writing.
-    val typing = if (modelThinking) L("🤔 Guardian AI se gândește…", "🤔 Guardian AI is thinking…").t()
+    val busy = conversation.busy
+    val typing = if (conversation.thinking) L("🤔 Guardian AI se gândește…", "🤔 Guardian AI is thinking…").t()
     else L("🤔 Guardian AI pregătește răspunsul…", "🤔 Guardian AI is preparing an answer…").t()
-
-    // Server AI (Kilo gateway, streamed word by word); offline rule-based answer if it fails before any text.
-    fun send(text: String) {
-        if (text.isBlank() || busy) return
-        msgs.add(Msg(true, text))
-        input = ""
-        busy = true
-        modelThinking = false
-        val history = msgs.map { it.fromUser to it.text }
-        msgs.add(Msg(false, ""))
-        val idx = msgs.lastIndex
-        scope.launch {
-            val sb = StringBuilder()
-            try {
-                vm.aiStream(history, if (en) "en" else "ro").collect { ev ->
-                    when (ev.optString("type")) {
-                        "thinking" -> modelThinking = true
-                        "delta" -> {
-                            sb.append(ev.getString("text"))
-                            msgs[idx] = Msg(false, sb.toString())
-                        }
-                        "error" -> throw ApiException(ev.optString("error", "ai_failed"), 0)
-                    }
-                }
-                if (sb.isEmpty()) throw ApiException("ai_failed", 0)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                msgs[idx] = Msg(
-                    false,
-                    if (sb.isEmpty()) reply(text, p, en) + if (en) "\n\n(offline mode)" else "\n\n(mod offline)"
-                    else "$sb …",
-                )
-            } finally {
-                busy = false
-                modelThinking = false
-            }
-        }
-    }
+    fun send(text: String) { vm.sendAi(text, en, reply(text, p, en)) }
     // Follow the answer while it grows (+1: the greeting is the first list item).
     LaunchedEffect(msgs.size, msgs.lastOrNull()?.text?.length) {
         if (msgs.isNotEmpty()) listState.scrollToItem(msgs.size)
@@ -149,12 +103,12 @@ fun AiScreen(vm: MainViewModel, p: UserProgress) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             quickPrompts.forEach { qp ->
                 val label = qp.t()
-                AssistChip(onClick = { send(label) }, label = { Text(label) })
+                AssistChip(enabled = !busy, onClick = { send(label) }, label = { Text(label) })
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(input, { input = it }, Modifier.weight(1f), singleLine = true)
-            Button(onClick = { send(input) }) { Text(L("Trimite", "Send").t()) }
+            OutlinedTextField(input, vm::setAiDraft, Modifier.weight(1f), singleLine = true)
+            Button(enabled = !busy && input.isNotBlank(), onClick = { send(input) }) { Text(L("Trimite", "Send").t()) }
         }
     }
 }

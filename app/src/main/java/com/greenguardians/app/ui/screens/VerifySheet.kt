@@ -21,6 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.graphicsLayer
+import com.greenguardians.app.ui.components.EcoGlyph
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -212,7 +217,17 @@ private fun RewardSummary(ids: List<String>, epBefore: Int) {
     }
     val ep = quests.sumOf { it.ep }
     val co2 = quests.sumOf { it.co2Kg }
-    Text("🎉 +$ep EP  ·  +${quests.sumOf { it.coins }} 🪙", style = MaterialTheme.typography.titleMedium)
+    val reveal = remember { Animatable(.85f) }
+    LaunchedEffect(Unit) { reveal.animateTo(1f, tween(400)) }
+    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().graphicsLayer { scaleX = reveal.value; scaleY = reveal.value }) {
+        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            EcoGlyph("progress", Modifier.size(52.dp))
+            Text(L("Încă un pas pentru planetă!", "Another step for the planet!").t(), style = MaterialTheme.typography.titleMedium)
+            Text("+$ep EP", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text("+${quests.sumOf { it.coins }} EcoCoins", style = MaterialTheme.typography.labelLarge)
+        }
+    }
     quests.forEach { Text("✔ " + it.title.t(), style = MaterialTheme.typography.bodySmall) }
     val newLeague = League.forEP(epBefore + ep)
     if (newLeague != League.forEP(epBefore)) {

@@ -5,6 +5,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Surface
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -83,7 +91,27 @@ fun DuelsCard(vm: MainViewModel) {
                                 }
                             }
                             "active", "finished" -> {
-                                Text(L("Tu: ${d.getInt("myScore")} EP · Adversar: ${d.getInt("opponentScore")} EP", "You: ${d.getInt("myScore")} EP · Opponent: ${d.getInt("opponentScore")} EP").t())
+                                val mine = d.getInt("myScore")
+                                val theirs = d.getInt("opponentScore")
+                                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) { EcoGlyph("profile", Modifier.padding(12.dp).size(32.dp)) }
+                                                Text(L("Tu", "You").t(), fontWeight = FontWeight.Bold)
+                                                Text("$mine EP", style = MaterialTheme.typography.titleLarge)
+                                            }
+                                            Text("VS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) { EcoGlyph("profile", Modifier.padding(12.dp).size(32.dp), tint = MaterialTheme.colorScheme.secondary) }
+                                                Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+                                                Text("$theirs EP", style = MaterialTheme.typography.titleLarge)
+                                            }
+                                        }
+                                        LinearProgressIndicator(progress = { if(mine + theirs == 0) .5f else mine.toFloat() / (mine + theirs) }, modifier = Modifier.fillMaxWidth(), trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = .4f))
+                                    }
+                                }
                                 if (status == "active") {
                                     val end = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(d.getLong("endsAt")))
                                     Text(L("Se încheie: $end", "Ends: $end").t())

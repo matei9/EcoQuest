@@ -28,7 +28,8 @@ class MainActivity : AppCompatActivity() {
         val isEn = AppCompatDelegate.getApplicationLocales().toLanguageTags().startsWith("en")
         setContent {
             val dark = vm.darkMode.collectAsStateWithLifecycle().value
-            GreenGuardiansTheme(darkMode = dark) {
+            val monet = vm.monetColors.collectAsStateWithLifecycle().value
+            GreenGuardiansTheme(darkMode = dark, monetColors = monet) {
                 CompositionLocalProvider(LocalIsEn provides isEn) {
                     Surface(Modifier.fillMaxSize()) { AppNav(vm) }
                 }

@@ -9,8 +9,8 @@
     <string name="nav_missions">Misiuni</string>
     <string name="nav_tree">Copac</string>
     <string name="nav_ai">AI Eco</string>
-    <string name="nav_leagues">Ligi &amp; Top</string>
-    <string name="nav_impact">Impact &amp; Shop</string>
+    <string name="nav_leagues">Ligi</string>
+    <string name="nav_impact">Impact</string>
     <string name="nav_profile">Profil</string>
 
     <string name="toggle_dark">Mod întunecat</string>

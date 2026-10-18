@@ -1,6 +1,22 @@
 package com.greenguardians.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.greenguardians.app.ui.components.AdventureButton
+import com.greenguardians.app.ui.components.EcoGlyph
+import com.greenguardians.app.ui.components.glyph
+import com.greenguardians.app.ui.fmt
+import java.time.ZoneId
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import com.greenguardians.app.data.QuestRepository
 import com.greenguardians.app.model.L
 import com.greenguardians.app.model.Quest
@@ -53,7 +71,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun MissionsScreen(vm: MainViewModel, p: UserProgress, onOpenTrivia: () -> Unit) {
-    var today by remember { mutableStateOf(LocalDate.now()) }
+    var today by remember { mutableStateOf(LocalDate.now(ZoneId.of("Europe/Bucharest"))) }
     var tab by remember { mutableStateOf(QuestKind.DAILY) }
     var verifying by remember { mutableStateOf<Quest?>(null) }
     val keys = p.completedKeys
@@ -67,6 +85,8 @@ fun MissionsScreen(vm: MainViewModel, p: UserProgress, onOpenTrivia: () -> Unit)
         (tab != QuestKind.DAILY || q.id in p.dailyQuestIds) && (transitAvailable || q.id !in transitIds)
     }
     val community by rememberApi(p.verifiedQuestEP) { vm.api.get("/api/community") }
+    var extras by rememberSaveable { mutableStateOf(false) }
+    val dailyDone = p.dailyQuestIds.count { id -> QuestRepository.byId(id)?.let { QuestRepository.isDone(it, keys, today) } == true }
     val receiptQuest = QuestRepository.daily.first { it.sgr > 0 }
 
     val fact by vm.fact.collectAsStateWithLifecycle()
@@ -75,7 +95,7 @@ fun MissionsScreen(vm: MainViewModel, p: UserProgress, onOpenTrivia: () -> Unit)
         vm.refresh()
         while (true) {
             delay(60_000)
-            val day = LocalDate.now()
+            val day = LocalDate.now(ZoneId.of("Europe/Bucharest"))
             if (day != today) {
                 today = day
                 vm.refresh()
@@ -84,39 +104,34 @@ fun MissionsScreen(vm: MainViewModel, p: UserProgress, onOpenTrivia: () -> Unit)
     }
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { FunFactCard(fact, onNext = vm::nextFact, onOpenTrivia = onOpenTrivia) }
-        item { StreakWidget(p.activeDays, today) }
-        item {
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(L("🧾 Bonuri SGR", "🧾 SGR receipts").t(), fontWeight = FontWeight.Bold)
-                    Text(L("Scanează bonul de returnare. Ambalajele se adună la progresul misiunilor SGR.", "Scan your return receipt. Packages count toward your SGR quests.").t())
-                    Button(onClick = { verifying = receiptQuest }) {
-                        Text(L("Scanează bon SGR", "Scan SGR receipt").t())
+        item(key = "daily-summary") {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatPill("🔥", L("${p.tree?.streak ?: 0} zile", "${p.tree?.streak ?: 0} days").t(), Modifier.weight(1f))
+                    StatPill("★", "${fmt(p.totalEP)} EP", Modifier.weight(1f))
+                    StatPill("●", "${fmt(p.ecoCoins)}", Modifier.weight(1f))
+                }
+                Text(L("Un pas mic. Un viitor mai verde.", "One small step. A greener future.").t(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .25f))) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(L("AVENTURA DE AZI", "TODAY'S ADVENTURE").t(), style = MaterialTheme.typography.labelMedium)
+                                Text(L("$dailyDone din ${p.dailyQuestIds.size} misiuni", "$dailyDone of ${p.dailyQuestIds.size} quests").t(), style = MaterialTheme.typography.titleLarge)
+                            }
+                            EcoGlyph(if (dailyDone == p.dailyQuestIds.size && dailyDone > 0) "progress" else "leaf", Modifier.size(46.dp))
+                        }
+                        LinearProgressIndicator(progress = { if (p.dailyQuestIds.isEmpty()) 0f else dailyDone.toFloat() / p.dailyQuestIds.size }, modifier = Modifier.fillMaxWidth().height(10.dp))
+                        Text(if (dailyDone == p.dailyQuestIds.size && dailyDone > 0) L("Toate misiunile de azi sunt gata. Bravo!", "All today's quests are done. Well done!").t()
+                            else L("Alese pentru tine. Fiecare acțiune contează.", "Picked for you. Every action counts.").t(), style = MaterialTheme.typography.bodyMedium)
                     }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { verifying = receiptQuest }, modifier = Modifier.weight(1f)) { Text(L("Scanează bon", "Scan receipt").t()) }
+                    OutlinedButton(onClick = onOpenTrivia, modifier = Modifier.weight(1f)) { Text(L("Quiz zilnic", "Daily quiz").t()) }
                 }
             }
         }
-        item { BossBattleCard(bossKm(community), onContribute = { tab = QuestKind.DAILY }) }
-
-        item {
-            SectionCard(L("🔗 Lanț de misiuni", "🔗 Quest chain"), L(
-                "Pas cu pas: jos la magazin → sacoșă reutilizabilă → fără plastic.",
-                "Step by step: walk to store → reusable bag → plastic-free.",
-            ))
-        }
-        itemsIndexed3(chain) { i, c ->
-            QuestCard(c, p, today, locked = nextChain != -1 && i > nextChain) { verifying = c }
-        }
-
-        item {
-            SectionCard(L("🎁 Misiune misterioasă", "🎁 Mystery quest"), L(
-                "Finalizeaz-o ca să deblochezi badge-ul „Detectiv Eco”.",
-                "Finish it to unlock the “Eco Detective” badge.",
-            ))
-        }
-        item { QuestCard(QuestRepository.mystery, p, today) { verifying = QuestRepository.mystery } }
-
         item {
             TabRow(selectedTabIndex = tab.ordinal) {
                 QuestKind.entries.forEach { k ->
@@ -125,14 +140,29 @@ fun MissionsScreen(vm: MainViewModel, p: UserProgress, onOpenTrivia: () -> Unit)
             }
         }
         if (tab == QuestKind.DAILY) item {
-            SectionCard(L("Misiunile tale de azi", "Your quests today"), L(
-                "Șase misiuni alese după răspunsurile tale și localitate. Se schimbă zilnic, nu la fiecare deschidere.",
-                "Six quests based on your answers and locality. They change daily, not every time you open the app.",
-            ))
-            if (p.dailyQuestIds.isEmpty()) Text(L("Actualizează backendul și reîncarcă profilul pentru misiunile personalizate.", "Update the backend and refresh your profile for personalized quests.").t())
-            OutlinedButton(onClick = vm::refresh) { Text(L("Actualizează misiunile", "Refresh quests").t()) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(L("Misiunile tale de azi", "Your quests today").t(), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = vm::refresh) { Text(L("Actualizează", "Refresh").t()) }
+            }
+            if (p.dailyQuestIds.isEmpty()) Text(L("Nu am putut încărca selecția. Verifică conexiunea și încearcă din nou.", "Could not load your selection. Check your connection and try again.").t())
         }
         items(visibleQuests, key = { it.id }) { q -> QuestCard(q, p, today) { verifying = q } }
+        item(key = "chain-path") {
+            SectionCard(L("Drumul tău verde", "Your green path"), L("Trei pași care se deblochează pe rând.", "Three steps unlocked one at a time."))
+            ChainPath(chainDone, nextChain) { i -> verifying = chain[i] }
+        }
+        item(key = "more-toggle") {
+            OutlinedButton(onClick = { extras = !extras }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (extras) L("Mai puține detalii ▴", "Fewer details ▴").t() else L("Comunitate, streak și surprize ▾", "Community, streak and surprises ▾").t())
+            }
+        }
+        if (extras) {
+            item { StreakWidget(p.activeDays, today) }
+            item { BossBattleCard(bossKm(community), onContribute = { tab = QuestKind.DAILY }) }
+            item { FunFactCard(fact, onNext = vm::nextFact, onOpenTrivia = onOpenTrivia) }
+            item { QuestCard(QuestRepository.mystery, p, today) { verifying = QuestRepository.mystery } }
+        }
+
     }
 
     verifying?.let { q ->
@@ -147,14 +177,6 @@ private fun num(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else "%.2f
 /** Community km toward the boss, null while loading or offline. */
 fun bossKm(community: Result<JSONObject>?): Double? =
     community?.getOrNull()?.getJSONObject("boss")?.getDouble("km")
-
-/** LazyListScope.itemsIndexed wrapper kept local to avoid an extra import clash with items(). */
-private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexed3(
-    list: List<Quest>,
-    content: @Composable (Int, Quest) -> Unit,
-) {
-    items(list.size, key = { list[it].id }) { content(it, list[it]) }
-}
 
 /** "Did you know" card; the daily trivia questions come from these facts. */
 @Composable
@@ -213,44 +235,87 @@ private fun StreakWidget(activeDays: Set<String>, today: LocalDate) {
 @Composable
 private fun QuestCard(q: Quest, p: UserProgress, today: LocalDate, locked: Boolean = false, onVerify: () -> Unit) {
     val done = QuestRepository.isDone(q, p.completedKeys, today)
-    // Server-tracked progress (km, SGR packages, check-ins, quest counts) for auto-completing quests.
     val metric = p.questProgress[q.id]
-    val auto = q.verification == Verification.AUTO
-    Card {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(q.title.t(), fontWeight = FontWeight.SemiBold)
-            Text(
-                "${q.difficulty.label.t()} · ${q.verification.label.t()} · ${q.kind.label.t()}",
-                style = MaterialTheme.typography.labelMedium,
-            )
-            Text("+${q.ep} EP   +${q.coins} 🪙", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            if (q.co2Kg > 0) {
-                Text(
-                    L(
-                        "+%.2f kg CO₂ evitați · +%.0f cm² gheață arctică salvată pentru urșii polari 🐻‍❄️".format(q.co2Kg, q.iceCm2),
-                        "+%.2f kg CO₂ avoided · +%.0f cm² Arctic ice saved for polar bears 🐻‍❄️".format(q.co2Kg, q.iceCm2),
-                    ).t(),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+    var details by rememberSaveable(q.id) { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (done) colors.primaryContainer.copy(alpha = .55f) else colors.surface),
+        border = BorderStroke(2.dp, if (done) colors.primary.copy(alpha = .45f) else colors.outlineVariant)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(52.dp).background(colors.primaryContainer, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                    EcoGlyph(if (done) "progress" else q.category.glyph(), Modifier.size(32.dp))
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(q.title.t(), style = MaterialTheme.typography.titleMedium)
+                    Text("${q.difficulty.label.t()} · +${q.ep} EP · +${q.coins} EcoCoins", style = MaterialTheme.typography.labelMedium, color = colors.primary)
+                }
             }
             if (metric != null && !done) {
                 val (value, target) = metric
-                LinearProgressIndicator(progress = { (value / target).toFloat().coerceIn(0f, 1f) }, Modifier.fillMaxWidth())
-                Text("%s / %s".format(num(value), num(target)), style = MaterialTheme.typography.labelMedium)
+                LinearProgressIndicator(progress = { if (target > 0) (value / target).toFloat().coerceIn(0f, 1f) else 0f }, modifier = Modifier.fillMaxWidth().height(8.dp))
+                Text("${num(value)} / ${num(target)}", style = MaterialTheme.typography.labelMedium)
             }
             when {
-                done -> Text("✔ " + L("Finalizat", "Completed").t(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                locked -> Text("🔒 " + L("Finalizează pasul anterior", "Finish the previous step").t())
-                auto -> Text(L("Se finalizează automat", "Completes automatically").t(), style = MaterialTheme.typography.labelMedium)
-                else -> Button(onClick = onVerify) {
-                    Text(
-                        when (q.verification) {
-                            Verification.GPS -> L("📍 Pornește traseul", "📍 Start trip")
-                            Verification.RECEIPT_AI -> if (q.sgr > 0) L("🧾 Scanează bon SGR", "🧾 Scan SGR receipt") else L("Verifică misiunea", "Verify quest")
-                            Verification.QR_PHOTO -> L("📱 Scanează QR", "📱 Scan QR")
-                            else -> L("Verifică misiunea", "Verify quest")
-                        }.t(),
-                    )
+                done -> Text(L("✓ Finalizat. Ai făcut diferența!", "✓ Complete. You made a difference!").t(), fontWeight = FontWeight.Bold, color = colors.primary)
+                locked -> Text(L("Finalizează mai întâi pasul anterior", "Finish the previous step first").t())
+                q.verification == Verification.AUTO -> Text(L("Se finalizează automat la atingerea țintei", "Completes automatically at the target").t(), style = MaterialTheme.typography.bodySmall)
+                else -> AdventureButton(onClick = onVerify, modifier = Modifier.fillMaxWidth()) {
+                    Text(when(q.verification) {
+                        Verification.GPS -> L("Pornește traseul", "Start trip")
+                        Verification.RECEIPT_AI -> if(q.sgr > 0) L("Scanează bonul", "Scan receipt") else L("Verifică misiunea", "Verify quest")
+                        Verification.QR_PHOTO -> L("Scanează QR", "Scan QR")
+                        else -> L("Începe misiunea", "Start quest")
+                    }.t())
+                }
+            }
+            TextButton(onClick = { details = !details }, contentPadding = PaddingValues(0.dp)) {
+                Text(if(details) L("Ascunde detaliile ▴", "Hide details ▴").t() else L("Impact și verificare ▾", "Impact and verification ▾").t())
+            }
+            if(details) {
+                Text(q.verification.label.t(), style = MaterialTheme.typography.bodySmall)
+                if(q.co2Kg > 0) Text(L("%.2f kg CO₂ evitați · %.0f cm² gheață arctică salvată".format(q.co2Kg,q.iceCm2), "%.2f kg CO₂ avoided · %.0f cm² Arctic ice saved".format(q.co2Kg,q.iceCm2)).t(), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatPill(icon: String, value: String, modifier: Modifier = Modifier) {
+    Surface(modifier, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Text("$icon $value", Modifier.padding(horizontal = 10.dp, vertical = 12.dp), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+    }
+}
+
+@Composable
+private fun ChainPath(done: List<Boolean>, next: Int, onOpen: (Int) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Box(Modifier.fillMaxWidth().height(310.dp)) {
+        Canvas(Modifier.matchParentSize()) {
+            val route = Path().apply {
+                moveTo(size.width * .25f, 48.dp.toPx())
+                cubicTo(size.width * .25f, 110.dp.toPx(), size.width * .75f, 90.dp.toPx(), size.width * .75f, 148.dp.toPx())
+                cubicTo(size.width * .75f, 210.dp.toPx(), size.width * .25f, 190.dp.toPx(), size.width * .25f, 248.dp.toPx())
+            }
+            drawPath(route, colors.outlineVariant, style = Stroke(8.dp.toPx()))
+        }
+        Column {
+            listOf(L("Mergi la magazin", "Walk to the store"), L("Ia sacoșa reutilizabilă", "Bring your reusable bag"), L("Alege fără plastic", "Choose plastic-free")).forEachIndexed { i, title ->
+                val locked = next != -1 && i > next
+                val nodeLabel = title.t() + when {
+                    done[i] -> L(" — finalizat", " — completed").t()
+                    locked -> L(" — blocat", " — locked").t()
+                    else -> L(" — începe", " — start").t()
+                }
+                Row(Modifier.fillMaxWidth().height(100.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if(i == 1) Box(Modifier.weight(1f))
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        OutlinedButton(onClick = { onOpen(i) }, enabled = !locked && !done[i], shape = CircleShape, modifier = Modifier.size(64.dp).semantics { contentDescription = nodeLabel }, contentPadding = PaddingValues(0.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(containerColor = if(done[i] || i == next) colors.primaryContainer else colors.surface)) {
+                            if(locked) Text("🔒") else EcoGlyph(if(done[i]) "progress" else listOf("transport","leaf","leaf")[i])
+                        }
+                        Text(title.t(), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    if(i != 1) Box(Modifier.weight(1f))
                 }
             }
         }
