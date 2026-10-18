@@ -27,6 +27,7 @@ fun <T> rememberApi(vararg keys: Any?, load: suspend () -> T): State<Result<T>?>
     }
 
 private val errors = mapOf(
+    "tree_server_outdated" to L("Actualizează backendul pentru grădina copacului și clasamentul de înălțime.", "Update the backend to enable the tree garden and height leaderboard."),
     "quest_not_assigned" to L("Misiunea nu face parte din selecția de azi. Actualizează misiunile.", "This quest is not assigned today. Refresh your quests."),
     "quest_not_available" to L("Misiunea nu este disponibilă pentru localitatea și transportul ales.", "This quest is unavailable for your locality and transport settings."),
     "invalid_context" to L("Alege localitatea și accesul la transport public.", "Choose your locality and public transport access."),

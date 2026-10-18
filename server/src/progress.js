@@ -2,6 +2,7 @@ import { quests, questById } from './catalog.js';
 import { addDays, periodKey, periodStart, today } from './time.js';
 import { dailyQuestIds, canUseTransit, isTransitQuest } from './personalization.js';
 import { duelStats } from './duels.js';
+import { syncTree } from './tree.js';
 
 const metricQuests = quests.filter((q) => q.verification === 'metric');
 
@@ -47,6 +48,7 @@ export function award(db, uid, quest, day = today()) {
   db.prepare('UPDATE users SET verified_ep = verified_ep + ?, co2 = co2 + ?, coins = coins + ? WHERE id = ?')
     .run(quest.ep, quest.co2, quest.coins, uid);
   if (quest.ep > 0) db.prepare('INSERT INTO earned_points (user_id, points, earned_at) VALUES (?, ?, ?)').run(uid, quest.ep, Date.now());
+  syncTree(db, uid, day);
   return true;
 }
 
@@ -94,6 +96,7 @@ export function me(db, uid, day = today()) {
       sgrReturned: u.sgr,
       dailyQuestIds: dailyQuestIds(db, uid, day),
       duelStats: duelStats(db, uid),
+      tree: syncTree(db, uid, day),
       completedKeys,
       activeDays,
       questProgress,

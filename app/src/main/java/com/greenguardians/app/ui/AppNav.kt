@@ -45,10 +45,12 @@ import com.greenguardians.app.ui.screens.MissionsScreen
 import com.greenguardians.app.ui.screens.ProfileScreen
 import com.greenguardians.app.ui.screens.QuizScreen
 import com.greenguardians.app.ui.screens.TriviaScreen
+import com.greenguardians.app.ui.screens.TreeScreen
 import com.greenguardians.app.viewmodel.MainViewModel
 
 private enum class Tab(val route: String, @StringRes val label: Int, val emoji: String) {
     MISSIONS("missions", R.string.nav_missions, "🏠"),
+    TREE("tree", R.string.nav_tree, "🌳"),
     AI("ai", R.string.nav_ai, "🤖"),
     LEAGUES("leagues", R.string.nav_leagues, "🏆"),
     IMPACT("impact", R.string.nav_impact, "🐻‍❄️"),
@@ -111,7 +113,7 @@ fun AppNav(vm: MainViewModel) {
                         selected = current == tab.route,
                         onClick = { nav.goTo(tab.route) },
                         icon = { Text(tab.emoji) },
-                        label = { Text(stringResource(tab.label)) },
+                        label = { Text(stringResource(tab.label), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     )
                 }
             }
@@ -120,6 +122,7 @@ fun AppNav(vm: MainViewModel) {
         NavHost(nav, startDestination = Tab.MISSIONS.route, modifier = Modifier.padding(pad)) {
             composable(Tab.MISSIONS.route) { MissionsScreen(vm, p) { nav.navigate("trivia") } }
             composable("trivia") { TriviaScreen(vm) { nav.popBackStack() } }
+            composable(Tab.TREE.route) { TreeScreen(vm, p) { nav.goTo(Tab.MISSIONS.route) } }
             composable(Tab.AI.route) { AiScreen(vm, p) }
             composable(Tab.LEAGUES.route) { LeaguesScreen(vm, me) { nav.goTo(Tab.MISSIONS.route) } }
             composable(Tab.IMPACT.route) { ImpactScreen(vm, p) }

@@ -29,6 +29,7 @@ data class UserProgress(
     val rankedPlayed: Int = 0,
     val rankedDraws: Int = 0,
     val duelPoints: Int = 0,
+    val tree: GuardianTree? = null,
     /** "questId@yyyy-MM-dd" for each completion. */
     val completedKeys: Set<String> = emptySet(),
     /** ISO dates with at least one completed quest (flexible 5-of-7 streak). */

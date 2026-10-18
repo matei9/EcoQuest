@@ -16,6 +16,7 @@ import { socialRoutes } from './social.js';
 import { readReceiptImage, ReceiptOcrError } from './receipt-ocr.js';
 import { dailyQuestIds, canUseTransit, isTransitQuest } from './personalization.js';
 import { duelRoutes } from './duels.js';
+import { treeLeaderboard } from './tree.js';
 
 class ApiError extends Error {
   constructor(status, code) {
@@ -94,6 +95,8 @@ export function createApp(db, { receiptOcr = readReceiptImage, now = Date.now } 
   });
 
   r.get('/me', auth, (req, res) => res.json(me(db, req.uid)));
+  r.get('/tree', auth, (req, res) => res.json(me(db, req.uid, today(new Date(now())))));
+  r.get('/leaderboard/trees', auth, (req, res) => res.json(treeLeaderboard(db, req.uid, today(new Date(now())))));
 
   r.delete('/me', auth, (req, res) => {
     db.prepare('UPDATE users SET referred_by = NULL WHERE referred_by = ?').run(req.uid);

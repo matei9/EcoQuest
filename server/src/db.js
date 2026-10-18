@@ -141,6 +141,17 @@ export function openDb(path) {
     );
     CREATE INDEX IF NOT EXISTS idx_duels_players ON duels(player1, player2, status);
     CREATE INDEX IF NOT EXISTS idx_duels_player2_status ON duels(player2, status);
+    CREATE TABLE IF NOT EXISTS tree_states (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      stage INTEGER NOT NULL DEFAULT 1 CHECK(stage BETWEEN 1 AND 7),
+      stage_days INTEGER NOT NULL DEFAULT 0,
+      height_cm INTEGER NOT NULL DEFAULT 20,
+      streak INTEGER NOT NULL DEFAULT 0,
+      missed_days INTEGER NOT NULL DEFAULT 0,
+      active_days INTEGER NOT NULL DEFAULT 0,
+      processed_day TEXT,
+      last_active_day TEXT
+    );
   `);
   // Additive migration for databases created before persistent GPS drafts.
   if (!db.prepare('PRAGMA table_info(trips)').all().some((c) => c.name === 'client_id')) {
