@@ -4,14 +4,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import com.greenguardians.app.data.ApiException
 import com.greenguardians.app.model.L
+import kotlinx.coroutines.CancellationException
 
 /** Loads once per key set; null while loading. */
 @Composable
 fun <T> rememberApi(vararg keys: Any?, load: suspend () -> T): State<Result<T>?> =
-    produceState<Result<T>?>(null, *keys) { value = runCatching { load() } }
+    // A changed request must not expose the previous request's result, even for one frame.
+    key(keys.toList()) {
+        produceState<Result<T>?>(null) {
+            value = try {
+                Result.success(load())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
 
 private val errors = mapOf(
     "network" to L("Fără conexiune la server. Încearcă din nou.", "No connection to the server. Try again."),

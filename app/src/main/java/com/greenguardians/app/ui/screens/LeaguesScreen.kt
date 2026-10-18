@@ -55,33 +55,39 @@ fun LeaguesScreen(vm: MainViewModel, me: Me, onGoMissions: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     var verifiedOnly by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
+    // LazyColumn can rebuild its content before this composable recomposes.
+    // Capture the request inputs now so its old content cannot read a new tab
+    // together with the previous tab's response.
+    val selectedTab = tab
+    val selectedVerifiedOnly = verifiedOnly
     val titles = listOf(L("👤 Individual", "👤 Individual"), L("🤝 Echipe", "🤝 Teams"), L("🎓 Școli", "🎓 Schools"), L("🏙️ Orașe", "🏙️ Cities"))
     val community by rememberApi(p.verifiedQuestEP) { vm.api.get("/api/community") }
     // Each tab loads from the server; keys refresh it after progress or team changes.
-    val data by rememberApi(tab, verifiedOnly, p.verifiedQuestEP, me.user.teamId, reload) {
-        when (tab) {
-            0 -> vm.api.get("/api/leaderboard/individual?metric=" + if (verifiedOnly) "verified" else "total")
+    val data by rememberApi(selectedTab, selectedVerifiedOnly, p.verifiedQuestEP, me.user.teamId, reload) {
+        when (selectedTab) {
+            0 -> vm.api.get("/api/leaderboard/individual?metric=" + if (selectedVerifiedOnly) "verified" else "total")
             1 -> vm.api.get("/api/teams")
             else -> JSONObject() // schools / cities load inside rankings()
         }
     }
+    val response = data
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { LeaguesShowcaseCard(p.league) }
         item { LeagueProgress(p) }
         item { BossBattleCard(bossKm(community), onContribute = onGoMissions) }
         item {
-            ScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
-                titles.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t.t()) }) }
+            ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 0.dp) {
+                titles.forEachIndexed { i, t -> Tab(selected = selectedTab == i, onClick = { tab = i }, text = { Text(t.t()) }) }
             }
         }
-        val r = data
+        val r = response
         when {
             r == null -> item { CircularProgressIndicator() }
             r.isFailure -> item { ErrorLine(r.exceptionOrNull()!!) }
-            tab == 0 -> individual(r.getOrThrow(), verifiedOnly) { verifiedOnly = it }
-            tab == 1 -> teamsTab(vm, me, r.getOrThrow()) { reload++ }
-            else -> rankings(vm, tab)
+            selectedTab == 0 -> individual(r.getOrThrow(), selectedVerifiedOnly) { verifiedOnly = it }
+            selectedTab == 1 -> teamsTab(vm, me, r.getOrThrow()) { reload++ }
+            else -> rankings(vm, selectedTab)
         }
     }
 }
