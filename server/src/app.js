@@ -12,6 +12,7 @@ import { award, evaluate, isDone, me } from './progress.js';
 import { isHash, labelsMatch, looksLikeEnergyBill, looksLikeReceipt, parseSgrCount } from './proofs.js';
 import { periodStart, today } from './time.js';
 import { inIasi, nearbyRoutes, transitEnabled, vehicleNear } from './transit.js';
+import { socialRoutes } from './social.js';
 
 class ApiError extends Error {
   constructor(status, code) {
@@ -262,6 +263,8 @@ export function createApp(db) {
   });
 
   // ---------- teams ----------
+  socialRoutes(r, db, auth, fail, userLimit(30, 60_000));
+  const clearTeamInvitations = (uid) => db.prepare('DELETE FROM team_invitations WHERE sender_id = ? OR recipient_id = ?').run(uid, uid);
   const TEAM_GOAL = 500;
   r.get('/teams', auth, (_req, res) => {
     const from = periodStart('weekly', today());
@@ -283,6 +286,7 @@ export function createApp(db) {
     tx(db, () => {
       const { lastInsertRowid } = db.prepare('INSERT INTO teams (name, city, created_by) VALUES (?, ?, ?)').run(name.trim(), u.city, req.uid);
       db.prepare('UPDATE users SET team_id = ? WHERE id = ?').run(lastInsertRowid, req.uid);
+      clearTeamInvitations(req.uid);
     });
     res.status(201).json(me(db, req.uid));
   });
@@ -290,12 +294,18 @@ export function createApp(db) {
   r.post('/teams/:id/join', auth, (req, res) => {
     const id = Number(req.params.id);
     if (!db.prepare('SELECT 1 FROM teams WHERE id = ?').get(id)) fail(404, 'unknown_team');
-    db.prepare('UPDATE users SET team_id = ? WHERE id = ?').run(id, req.uid);
+    tx(db, () => {
+      db.prepare('UPDATE users SET team_id = ? WHERE id = ?').run(id, req.uid);
+      clearTeamInvitations(req.uid);
+    });
     res.json(me(db, req.uid));
   });
 
   r.post('/teams/leave', auth, (req, res) => {
-    db.prepare('UPDATE users SET team_id = NULL WHERE id = ?').run(req.uid);
+    tx(db, () => {
+      db.prepare('UPDATE users SET team_id = NULL WHERE id = ?').run(req.uid);
+      clearTeamInvitations(req.uid);
+    });
     res.json(me(db, req.uid));
   });
 

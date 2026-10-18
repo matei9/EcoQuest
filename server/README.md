@@ -12,7 +12,7 @@ npm run dev                 # http://127.0.0.1:5200/api/health
 npm test
 ```
 
-Android emulator → local server: in `gradle.properties` set `GG_API_URL=http://10.0.2.2:5200` (cleartext is allowed only for 10.0.2.2) and start the server with `HOST=0.0.0.0`.
+Android emulator → local server: in ignored `local.properties` set `GG_API_URL=http://10.0.2.2:5200` (cleartext is allowed only for 10.0.2.2) and start the server with `HOST=0.0.0.0`.
 
 ## Deploy behind Cloudflare (owner's chosen setup)
 
@@ -27,7 +27,7 @@ See [deploy/CLOUDFLARE.md](deploy/CLOUDFLARE.md): Node on 0.0.0.0:5200, no TLS o
    ```
    Installs Node 24, nginx, certbot (Let's Encrypt), ufw, a `greenguardians` system user, systemd unit `green-guardians-api`, daily SQLite backups. Port 5200 is not opened in the firewall.
 3. Edit `/etc/green-guardians/api.env` (keys below), then `sudo systemctl restart green-guardians-api`.
-4. App: `GG_API_URL=https://api.domeniul-tau.ro` in `gradle.properties`, rebuild.
+4. App: `GG_API_URL=https://api.domeniul-tau.ro` in ignored `local.properties`, rebuild.
 
 Logs: `journalctl -u green-guardians-api -f`. Update: pull the repo and re-run `install.sh` (keeps DB + env).
 
@@ -67,3 +67,18 @@ Rewards (EP, CO₂, EcoCoins) come only from `src/catalog.js`. All proofs from a
 `GET /health` · `GET /config` · `POST /auth/signup` · `POST /auth/login` · `GET /me` · `DELETE /me` · `POST /quiz {answers:[10 option indices]}` · `POST /quests/:id/complete {proof}` · `POST /receipts` · `POST /trips` · `POST /transit/nearby` · `POST /transit/board` · `POST /events/checkin` · `GET /leaderboard/individual?metric=total|verified` · `GET /leaderboard/schools` · `GET /leaderboard/cities` · `GET /teams` · `POST /teams` · `POST /teams/:id/join` · `POST /teams/leave` · `GET /community` · `GET /vouchers` · `POST /vouchers/:id/redeem` · `GET /facts/next` · `GET /trivia` · `POST /trivia/submit {token, answers[10]}` · `POST /ai/chat {messages, lang}` · `POST /ai/chat/stream {messages, lang}` (SSE: `data: {"type":"thinking"|"delta"|"done"|"error"}`; used by the app)
 
 Errors: `{ "error": "<code>" }` with HTTP status; codes are mapped to RO/EN text in `app/.../ui/ApiState.kt`.
+## Friends and team invitations
+
+Deploy the updated backend before using the friends UI in the Android app. Restarting the backend creates the new `friendships` and `team_invitations` tables automatically; existing accounts and teams are preserved.
+
+In **Leagues → Teams → Friends and invitations**, users share their existing personal code, send a friend request, and accept or decline incoming requests. Either friend can remove the relationship. A team member can invite an accepted friend who has no team; the recipient must explicitly accept to join. Changing teams or removing the friendship clears affected outstanding invitations. Lists refresh when the screen opens or the user taps Refresh list; there are no push notifications.
+
+All endpoints require a session token:
+
+- `GET /api/friends`: friends, incoming/outgoing friend requests, incoming team invitations and recipients already invited to the current team. Responses exclude emails and other users' personal codes.
+- `POST /api/friends` with `{ "code": "PERSONAL_CODE" }`: send a friend request.
+- `POST /api/friends/:id/accept`: accept a request from this user.
+- `DELETE /api/friends/:id`: decline/cancel a request or remove a friend.
+- `POST /api/teams/invitations` with `{ "userId": 123 }`: invite a friend to the caller's team.
+- `POST /api/teams/invitations/:id/accept`: accept an incoming invitation; returns the updated profile.
+- `DELETE /api/teams/invitations/:id`: decline or withdraw a team invitation.

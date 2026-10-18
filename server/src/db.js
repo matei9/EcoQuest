@@ -43,6 +43,23 @@ export function openDb(path) {
       day TEXT NOT NULL,
       UNIQUE (user_id, quest_id, period)
     );
+    CREATE TABLE IF NOT EXISTS friendships (
+      low_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      high_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      accepted INTEGER NOT NULL DEFAULT 0 CHECK (accepted IN (0, 1)),
+      PRIMARY KEY (low_id, high_id),
+      CHECK (low_id < high_id),
+      CHECK (requested_by IN (low_id, high_id))
+    );
+    CREATE TABLE IF NOT EXISTS team_invitations (
+      id INTEGER PRIMARY KEY,
+      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE (team_id, recipient_id),
+      CHECK (sender_id != recipient_id)
+    );
     CREATE TABLE IF NOT EXISTS trips (
       id INTEGER PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

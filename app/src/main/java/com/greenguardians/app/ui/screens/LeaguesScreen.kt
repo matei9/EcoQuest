@@ -39,6 +39,7 @@ import com.greenguardians.app.model.League
 import com.greenguardians.app.model.Me
 import com.greenguardians.app.ui.ErrorLine
 import com.greenguardians.app.ui.components.BossBattleCard
+import com.greenguardians.app.ui.components.FriendsCard
 import com.greenguardians.app.ui.components.LeagueIcon
 import com.greenguardians.app.ui.components.LeagueProgress
 import com.greenguardians.app.ui.components.LeaguesShowcaseCard
@@ -117,6 +118,7 @@ private fun LazyListScope.teamsTab(vm: MainViewModel, me: Me, o: JSONObject, cha
     val goal = o.getInt("goal")
     val teams = Json.objects(o.getJSONArray("teams"))
     val mine = teams.firstOrNull { it.getInt("id") == me.user.teamId }
+    item(key = "friends") { FriendsCard(vm, me, changed) }
     item {
         val scope = rememberCoroutineScope()
         var dialog by remember { mutableStateOf(false) }
