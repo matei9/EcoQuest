@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,7 +18,7 @@ android {
         versionName = "1.0"
 
         // Keep the deployment URL in ignored local.properties, or supply GG_API_URL via Gradle/CI.
-        val localConfig = java.util.Properties().apply {
+        val localConfig = Properties().apply {
             val configFile = rootProject.file("local.properties")
             if (configFile.exists()) configFile.inputStream().use { load(it) }
         }
