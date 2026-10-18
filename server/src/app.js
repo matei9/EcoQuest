@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
@@ -9,10 +9,13 @@ import { tx } from './db.js';
 import { analyzeTrack, haversineKm, validPoint } from './geo.js';
 import { factById, facts, selectTrivia, triviaReward } from './facts.js';
 import { award, evaluate, isDone, me } from './progress.js';
-import { isHash, labelsMatch, looksLikeEnergyBill, looksLikeReceipt, parseSgrCount } from './proofs.js';
+import { isHash, labelsMatch, looksLikeEnergyBill, looksLikeReceipt, parseSgrCount, parseReceiptTimestamp } from './proofs.js';
 import { periodStart, today } from './time.js';
 import { inIasi, nearbyRoutes, transitEnabled, vehicleNear } from './transit.js';
 import { socialRoutes } from './social.js';
+import { readReceiptImage, ReceiptOcrError } from './receipt-ocr.js';
+import { dailyQuestIds, canUseTransit, isTransitQuest } from './personalization.js';
+import { duelRoutes } from './duels.js';
 
 class ApiError extends Error {
   constructor(status, code) {
@@ -36,7 +39,7 @@ function checkPassword(pw, stored) {
 
 const signSession = (uid) => jwt.sign({ uid, typ: 'session' }, config.jwtSecret, { expiresIn: '30d' });
 
-export function createApp(db) {
+export function createApp(db, { receiptOcr = readReceiptImage, now = Date.now } = {}) {
   const app = express();
   app.set('trust proxy', 1); // behind nginx
   app.use(express.json({ limit: '2mb' }));
@@ -63,7 +66,7 @@ export function createApp(db) {
 
   r.get('/health', (_req, res) => res.json({ ok: true }));
   r.get('/config', (_req, res) =>
-    res.json({ demoMode: config.demoMode, aiEnabled: aiEnabled(), transitEnabled: transitEnabled(), cities: CITIES, schools: SCHOOLS }));
+    res.json({ demoMode: config.demoMode, aiEnabled: aiEnabled(), transitEnabled: transitEnabled(), receiptOcr: 'server-v1', receiptValidation: 'datetime-v2', cities: CITIES, schools: SCHOOLS }));
 
   // ---------- auth ----------
   r.post('/auth/signup', authLimit, (req, res) => {
@@ -103,7 +106,15 @@ export function createApp(db) {
     const cats = scoreQuiz(req.body?.answers);
     if (!cats) fail(400, 'invalid_answers');
     const ep = Math.min(cats.reduce((a, b) => a + b, 0) * 25, 2500);
-    db.prepare('UPDATE users SET quiz_done = 1, cat_scores = ?, initial_ep = ? WHERE id = ?').run(cats.join(','), ep, req.uid);
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.uid);
+    const locality = req.body?.locality ?? user.locality;
+    const transport = req.body?.publicTransport ?? !!user.public_transport;
+    if (!['urban', 'rural'].includes(locality) || typeof transport !== 'boolean') fail(400, 'invalid_context');
+    tx(db, () => {
+      db.prepare('UPDATE users SET quiz_done = 1, cat_scores = ?, initial_ep = ?, quiz_answers = ?, locality = ?, public_transport = ? WHERE id = ?')
+        .run(cats.join(','), ep, JSON.stringify(req.body.answers), locality, transport ? 1 : 0, req.uid);
+      if (!user.quiz_done) db.prepare('DELETE FROM daily_assignments WHERE user_id = ? AND day = ?').run(req.uid, today());
+    });
     res.json(me(db, req.uid));
   });
 
@@ -118,6 +129,9 @@ export function createApp(db) {
     const proof = req.body?.proof ?? {};
     const day = today();
     const out = tx(db, () => {
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.uid);
+      if (/^d\d+$/.test(q.id) && !dailyQuestIds(db, req.uid, day).includes(q.id)) fail(403, 'quest_not_assigned');
+      if (isTransitQuest(q.id) && !canUseTransit(user)) fail(403, 'quest_not_available');
       if (isDone(db, req.uid, q, day)) fail(409, 'already_done');
       if (q.requires && !isDone(db, req.uid, questById.get(q.requires), day)) fail(409, 'locked');
       if (proof.type === 'demo') {
@@ -148,20 +162,41 @@ export function createApp(db) {
     res.json({ awarded: out, ...me(db, req.uid) });
   });
 
-  // ---------- SGR receipts (on-device OCR text) ----------
-  r.post('/receipts', auth, (req, res) => {
-    const { text, imageHash } = req.body ?? {};
-    if (typeof text !== 'string' || text.length > 20_000 || !isHash(imageHash)) fail(400, 'bad_proof');
-    const count = parseSgrCount(text);
-    if (count === 0) fail(422, 'not_sgr_receipt');
+  // ---------- SGR receipts (image upload, server-side OCR) ----------
+  r.post('/receipts', auth, userLimit(20, 60_000), express.raw({ type: ['image/jpeg', 'image/png'], limit: '12mb' }), async (req, res) => {
+    if (!Buffer.isBuffer(req.body)) fail(426, 'receipt_upgrade_required');
+    const imageHash = createHash('sha256').update(req.body).digest('hex');
+    const receiptHash = `receipt_image:${imageHash}`;
+    // Keep compatibility with accepted receipts from before namespaced image keys.
+    // An image previously used as an unrelated photo must not block receipt OCR.
+    if (db.prepare('SELECT 1 FROM proof_hashes WHERE kind = ? AND hash IN (?, ?)')
+      .get('receipt', imageHash, receiptHash)) fail(409, 'receipt_already_used');
+    const text = await receiptOcr(req.body);
+    const stamp = parseReceiptTimestamp(text);
+    if (!stamp) fail(422, 'receipt_datetime_missing');
+    if (req.query.count !== undefined && (typeof req.query.count !== 'string' || !/^\d{1,3}$/.test(req.query.count)
+      || Number(req.query.count) < 1 || Number(req.query.count) > 200)) fail(422, 'receipt_count_invalid');
+    const manualCount = Number(req.query.count ?? 0);
+    const count = parseSgrCount(text) || manualCount;
+    // Unknown quantity is zero: accept the timestamp without inventing package credit.
+    const creditedCount = Number.isInteger(count) && count >= 1 && count <= 200 ? count : 0;
     const day = today();
     const awarded = tx(db, () => {
-      useProof(imageHash, req.uid, 'receipt');
-      db.prepare('INSERT INTO receipts (user_id, count, day) VALUES (?, ?, ?)').run(req.uid, count, day);
-      db.prepare('UPDATE users SET sgr = sgr + ? WHERE id = ?').run(count, req.uid);
+      if (db.prepare('SELECT 1 FROM proof_hashes WHERE kind = ? AND hash IN (?, ?)')
+        .get('receipt', imageHash, receiptHash)) fail(409, 'receipt_already_used');
+      // A missing-seconds scan conflicts with any saved time in that minute.
+      const duplicate = stamp.hasSeconds
+        ? db.prepare('SELECT 1 FROM proof_hashes WHERE hash = ?').get(stamp.minuteKey)
+        : db.prepare('SELECT 1 FROM proof_hashes WHERE kind = ? AND (hash = ? OR hash LIKE ?)')
+          .get('receipt_time', stamp.minuteKey, `${stamp.minuteKey}:%`);
+      if (duplicate || db.prepare('SELECT 1 FROM proof_hashes WHERE hash = ?').get(stamp.key)) fail(409, 'receipt_already_used');
+      useProof(receiptHash, req.uid, 'receipt');
+      useProof(stamp.key, req.uid, 'receipt_time');
+      db.prepare('INSERT INTO receipts (user_id, count, day) VALUES (?, ?, ?)').run(req.uid, creditedCount, day);
+      db.prepare('UPDATE users SET sgr = sgr + ? WHERE id = ?').run(creditedCount, req.uid);
       return evaluate(db, req.uid, day);
     });
-    res.json({ count, awarded, ...me(db, req.uid) });
+    res.json({ count: creditedCount, receiptDay: stamp.day, receiptTime: stamp.time, awarded, ...me(db, req.uid) });
   });
 
   // ---------- trips: walk/cycle GPS tracks, transit via CTP live vehicles ----------
@@ -185,6 +220,15 @@ export function createApp(db) {
 
   r.post('/trips', auth, async (req, res) => {
     const { mode } = req.body ?? {};
+    const clientId = req.body?.clientId ?? null;
+    if (clientId !== null && (typeof clientId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId))) fail(400, 'bad_trip_id');
+    if (clientId !== null) {
+      const saved = db.prepare('SELECT mode, km FROM trips WHERE user_id = ? AND client_id = ?').get(req.uid, clientId);
+      if (saved) {
+        if (saved.mode !== mode) fail(409, 'bad_trip_id');
+        return res.json({ km: saved.km, awarded: [], ...me(db, req.uid) });
+      }
+    }
     let km;
     if (mode === 'walk' || mode === 'cycle') {
       const a = analyzeTrack(req.body.points, mode);
@@ -211,7 +255,7 @@ export function createApp(db) {
     }
     const day = today();
     const awarded = tx(db, () => {
-      db.prepare('INSERT INTO trips (user_id, mode, km, day) VALUES (?, ?, ?, ?)').run(req.uid, mode, km, day);
+      db.prepare('INSERT INTO trips (user_id, mode, km, day, client_id) VALUES (?, ?, ?, ?, ?)').run(req.uid, mode, km, day, clientId);
       return evaluate(db, req.uid, day);
     });
     res.json({ km, awarded, ...me(db, req.uid) });
@@ -264,6 +308,7 @@ export function createApp(db) {
 
   // ---------- teams ----------
   socialRoutes(r, db, auth, fail, userLimit(30, 60_000));
+  duelRoutes(r, db, auth, fail, userLimit(30, 60_000), now);
   const clearTeamInvitations = (uid) => db.prepare('DELETE FROM team_invitations WHERE sender_id = ? OR recipient_id = ?').run(uid, uid);
   const TEAM_GOAL = 500;
   r.get('/teams', auth, (_req, res) => {
@@ -389,6 +434,7 @@ export function createApp(db) {
       if (ins.changes === 0) fail(409, 'trivia_done_today');
       // Trivia EP counts as earned in-app (verified_ep); it never adds CO2.
       db.prepare('UPDATE users SET verified_ep = verified_ep + ?, coins = coins + ? WHERE id = ?').run(reward.ep, reward.coins, req.uid);
+      if (reward.ep > 0) db.prepare('INSERT INTO earned_points (user_id, points, earned_at) VALUES (?, ?, ?)').run(req.uid, reward.ep, Date.now());
     });
     res.json({ score, total: results.length, ...reward, results, ...me(db, req.uid) });
   });
@@ -455,7 +501,7 @@ export function createApp(db) {
 
   app.use((_req, _res, next) => next(new ApiError(404, 'not_found')));
   app.use((err, _req, res, _next) => {
-    if (err instanceof ApiError) return res.status(err.status).json({ error: err.code });
+    if (err instanceof ApiError || err instanceof ReceiptOcrError) return res.status(err.status).json({ error: err.code });
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'bad_json' });
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'too_large' });
     console.error(err);

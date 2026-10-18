@@ -115,7 +115,47 @@ export function openDb(path) {
     CREATE INDEX IF NOT EXISTS idx_completions_user_day ON completions(user_id, day);
     CREATE INDEX IF NOT EXISTS idx_trips_user_day ON trips(user_id, day);
     CREATE INDEX IF NOT EXISTS idx_receipts_user_day ON receipts(user_id, day);
+    CREATE TABLE IF NOT EXISTS daily_assignments (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day TEXT NOT NULL, quest_ids TEXT NOT NULL, PRIMARY KEY(user_id, day)
+    );
+    CREATE TABLE IF NOT EXISTS earned_points (
+      id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      points INTEGER NOT NULL CHECK(points > 0), earned_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_earned_user_time ON earned_points(user_id, earned_at);
+    CREATE TABLE IF NOT EXISTS duel_queue (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      queued_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS duels (
+      id INTEGER PRIMARY KEY,
+      player1 INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      player2 INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      mode TEXT NOT NULL CHECK(mode IN ('friendly', 'ranked')),
+      status TEXT NOT NULL CHECK(status IN ('pending', 'active', 'finished', 'cancelled')),
+      created_at INTEGER NOT NULL, starts_at INTEGER, ends_at INTEGER,
+      score1 INTEGER NOT NULL DEFAULT 0, score2 INTEGER NOT NULL DEFAULT 0,
+      winner_id INTEGER,
+      CHECK(player1 IS NULL OR player2 IS NULL OR player1 != player2)
+    );
+    CREATE INDEX IF NOT EXISTS idx_duels_players ON duels(player1, player2, status);
+    CREATE INDEX IF NOT EXISTS idx_duels_player2_status ON duels(player2, status);
   `);
+  // Additive migration for databases created before persistent GPS drafts.
+  if (!db.prepare('PRAGMA table_info(trips)').all().some((c) => c.name === 'client_id')) {
+    db.exec('ALTER TABLE trips ADD COLUMN client_id TEXT');
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_trips_client_id ON trips(user_id, client_id)');
+  for (const [name, sql] of [
+    ['quiz_answers', "TEXT NOT NULL DEFAULT '[]'"],
+    ['locality', "TEXT NOT NULL DEFAULT 'urban'"],
+    ['public_transport', 'INTEGER NOT NULL DEFAULT 0'],
+  ]) {
+    if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === name)) {
+      db.exec(`ALTER TABLE users ADD COLUMN ${name} ${sql}`);
+    }
+  }
   return db;
 }
 

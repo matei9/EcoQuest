@@ -7,6 +7,8 @@ Node.js 24 + Express 5 + SQLite (`node:sqlite`, no native deps). Listens on **12
 ```bash
 cd server
 npm install
+python3 -m venv .venv-ocr     # Python 3.12 recommended
+.venv-ocr/bin/python -m pip install -r requirements-ocr.txt
 cp .env.example .env        # set JWT_SECRET (>= 32 chars)
 npm run dev                 # http://127.0.0.1:5200/api/health
 npm test
@@ -48,11 +50,11 @@ Logs: `journalctl -u green-guardians-api -f`. Update: pull the repo and re-run `
 
 If Kilo fails (or `KILO_ENABLED=false`) the app falls back to its offline answers; without `TRANZY_API_KEY` transit quests return `transit_unavailable`.
 
-## How verification works (no server-side AI)
+## How verification works
 
 | Proof | On the phone | Server checks |
 |---|---|---|
-| SGR receipt (`POST /receipts`) | ML Kit OCR text + SHA-256 of image | re-parses text (`SGR`/`garanție`, count or 0,50 lei deposit), image hash unique, adds packages → SGR quests auto-complete at thresholds |
+| SGR receipt (`POST /receipts`) | gallery or integrated CameraX capture, orientation normalization and JPEG upload | local neural RapidOCR/ONNX reads the photo, validates printed date/time with no age restriction or SGR keyword requirement, and blocks reused image or date/time across accounts. Extracts quantity or uses optional manual `count` (1–200) if unreadable. An unreadable quantity does not reject the receipt or invent package credit. Every accepted receipt completes the daily mystery quest; known packages count toward SGR thresholds. |
 | Photo (`labels`) | ML Kit image labels + hash | labels match quest (food etc.), hash unique; before/after needs 2 different images |
 | Bill / second-hand (`ocr`) | OCR text + hash | contains `kWh` / looks like a receipt; hash unique |
 | Walk / cycle (`POST /trips`) | GPS points every ~5 s | distance, duration, avg + per-segment speed caps (car speeds rejected) → km quests auto-complete |
@@ -62,11 +64,35 @@ If Kilo fails (or `KILO_ENABLED=false`) the app falls back to its offline answer
 
 Rewards (EP, CO₂, EcoCoins) come only from `src/catalog.js`. All proofs from a modified client can still be faked in principle; hashes, speed checks and live-vehicle checks raise the cost.
 
-## Endpoints (all under `/api`, JSON, `Authorization: Bearer <token>` except auth/health/config)
+## Endpoints (under `/api`, JSON except receipt image upload, `Authorization: Bearer <token>` except auth/health/config)
+
+Personalized daily quests: `POST /quiz` also accepts `locality: "urban" | "rural"` and `publicTransport: boolean`, retaining the ten scored answers. `/me` exposes `progress.dailyQuestIds` (six assignments stable for the Romanian calendar day), `user.locality`, and `user.publicTransport`. Selection prioritizes weak quiz categories and specific answers, with deterministic daily variety and at most two quests from one category. Local-market community quest `d16` and entry SGR target `d5` are included. Standard daily quests outside the assigned set cannot be completed or auto-awarded. Rural users, those without practical transport access, and cities outside the supported Iași transit validation do not receive transit quests. Retaking the quiz changes the next day's selection; newly unavailable transit quests are replaced immediately without rerolling other assignments. Existing accounts can retake the quiz to supply locality/access. Weekly community market quest `w10` is also available. Market quests use the existing honour-confirmation proof flow.
+
+Duels: `GET /duels`, `POST /duels/friends {userId}`, `POST /duels/:id/accept`, `DELETE /duels/:id` (pending invitations only), `POST /duels/queue`, `DELETE /duels/queue`. Friendly invitations require accepted friendship and recipient acceptance. Queueing opts into ranked matching with a random nonfriend; searches expire after 30 minutes and pending friend invitations after seven days. A player can have one active duel; starting it cancels other pending invitations and removes both queue entries. Duels last exactly seven days from acceptance/matching. Only server-issued earned EP (quests and trivia) recorded in that half-open interval count, never baseline quiz points or historic EP. An append-only `earned_points` ledger records new awards; historical totals are not backfilled into matches. Results finalize on the next duel/profile request after the deadline, retaining final scores. Deleting an account forfeits its active duel. `/me.progress.duelStats` contains ranked `played`, `wins`, `draws`, and separate 1v1 `points` (3/win, 1/draw, 0/loss); friendly results never change these stats or grant bonus EcoPoints. The Android UI is under Leagues → 1v1; friend challenges are under Teams → Friends.
+
+Schema upgrades are additive and applied by `openDb`; update/restart the backend and install the new Android build together. Assignment, queue and duel state persist in SQLite across service restarts. Active duels are shown before invitations and history; the response retains at most 30 matches per participant.
 
 `GET /health` · `GET /config` · `POST /auth/signup` · `POST /auth/login` · `GET /me` · `DELETE /me` · `POST /quiz {answers:[10 option indices]}` · `POST /quests/:id/complete {proof}` · `POST /receipts` · `POST /trips` · `POST /transit/nearby` · `POST /transit/board` · `POST /events/checkin` · `GET /leaderboard/individual?metric=total|verified` · `GET /leaderboard/schools` · `GET /leaderboard/cities` · `GET /teams` · `POST /teams` · `POST /teams/:id/join` · `POST /teams/leave` · `GET /community` · `GET /vouchers` · `POST /vouchers/:id/redeem` · `GET /facts/next` · `GET /trivia` · `POST /trivia/submit {token, answers[10]}` · `POST /ai/chat {messages, lang}` · `POST /ai/chat/stream {messages, lang}` (SSE: `data: {"type":"thinking"|"delta"|"done"|"error"}`; used by the app)
 
 Errors: `{ "error": "<code>" }` with HTTP status; codes are mapped to RO/EN text in `app/.../ui/ApiState.kt`.
+
+Receipt dates support `DD.MM.YYYY`, `DD/MM/YYYY`, `DD-MM-YYYY`, `YYYY-MM-DD` and abbreviated Romanian/English month names (including LIDL `08:22:45 18-OCT-2026`). Date and time must both be present and calendar-valid; past and future dates are accepted per the owner's requested policy. Full timestamps are normalized for duplicate checks; when seconds are unreadable, matching any saved timestamp in the same minute is rejected conservatively. The optional manual quantity is used only when text extraction finds no count. Rewards are credited to the upload day's period. Previous uploads that stored only image hashes cannot retroactively be deduplicated by timestamp. Update the backend and Android app together.
+
+## Server receipt OCR setup
+
+The deployment installers install Python, create `.venv-ocr`, and install the pinned packages in `requirements-ocr.txt`. RapidOCR's models are bundled in its package; inference uses the local CPU and does not call a cloud OCR API. `GG_OCR_PYTHON` can override the interpreter path; otherwise the backend uses `.venv-ocr/bin/python` when present. On minimal Linux hosts, OpenCV also requires `libgl1` and `libglib2.0-0`, which the installers install.
+
+`POST /api/receipts` now takes a **raw JPEG or PNG body**, content type `image/jpeg` or `image/png`, up to 12 MiB; optional manual quantity is `?count=3`. Text-only JSON submissions return HTTP 426 `receipt_upgrade_required`. The server computes the image hash itself. Images are placed in private temporary files and deleted after processing, including failures. Only timestamp deduplication keys, image hashes, quantity and existing progress records remain. There is one active OCR job per server process, a 75-second worker timeout, and a per-user limit of 20 submissions per minute.
+
+`GET /api/config` includes `receiptOcr: "server-v1"` and `receiptValidation: "datetime-v2"`; the Android app checks this before uploading so an old backend gives an explicit update-required message. Missing Python dependencies return `receipt_ocr_unavailable`; a busy worker returns `receipt_ocr_busy`. For a local real-image regression test, set `GG_RECEIPT_TEST_IMAGE` to the private LIDL fixture path and `GG_OCR_PYTHON` to the configured interpreter, then run the test suite. The fixture is not committed.
+
+After copying the updated project onto the deployment host, run `sudo bash deploy/install-cloudflare.sh` from `server/` (or the existing nginx installer if that is your setup). This installs OCR dependencies and restarts the API while keeping its DB and environment file. Rebuild/reinstall Android as well. The nginx template now allows 12 MiB uploads and a 100-second proxy read timeout.
+
+## Saved GPS trips
+
+Walking/cycling recordings use a foreground location service and a local per-account draft in the Android app. Closing the quest does not end the recording. The notification can stop GPS while keeping the route for submission. After process death, a restored draft is stopped; it must be submitted or discarded before recording another route, so unrecorded movement is not counted.
+
+`POST /api/trips` accepts an optional UUID `clientId`. Retrying an accepted ID for the same account/mode returns the saved distance and current profile with no new rewards or trip row. Old clients without this field still work. The backend automatically migrates existing trip tables and preserves their data. Update/restart the backend before installing this app change to ensure retries cannot duplicate saved distances.
 ## Friends and team invitations
 
 Deploy the updated backend before using the friends UI in the Android app. Restarting the backend creates the new `friendships` and `team_invitations` tables automatically; existing accounts and teams are preserved.
@@ -82,3 +108,5 @@ All endpoints require a session token:
 - `POST /api/teams/invitations` with `{ "userId": 123 }`: invite a friend to the caller's team.
 - `POST /api/teams/invitations/:id/accept`: accept an incoming invitation; returns the updated profile.
 - `DELETE /api/teams/invitations/:id`: decline or withdraw a team invitation.
+
+The mystery quest now validates an SGR receipt rather than collection-point image labels. Only a calendar-valid printed date/time is required. Missing quantity is stored as zero; optional `count` must be 1–200 when provided. Duplicate protection applies only to accepted receipts (including historical receipt hashes), globally by image and printed timestamp. Rejected attempts do not reserve either key. Unrelated photo-proof hashes do not block receipt uploads. Update both backend and Android app for this policy; the new app checks the `datetime-v2` capability.

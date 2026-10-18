@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { fakeReceiptImage, fakeReceiptOcr } from './receipt-fixture.js';
 
 process.env.JWT_SECRET = 'test-secret-test-secret-test-secret-123';
 process.env.DEMO_MODE = 'false';
@@ -15,17 +16,18 @@ let base;
 let db;
 before(async () => {
   db = openDb(':memory:');
-  server = createApp(db).listen(0);
+  server = createApp(db, { receiptOcr: fakeReceiptOcr }).listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api`;
 });
 after(() => server.close());
 
 const call = async (method, path, body, token) => {
+  const receipt = method === 'POST' && path === '/receipts';
   const res = await fetch(base + path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { 'Content-Type': receipt ? 'image/png' : 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: receipt ? fakeReceiptImage(body.text, body.imageHash) : body ? JSON.stringify(body) : undefined,
   });
   return { status: res.status, body: res.status === 204 ? null : await res.json() };
 };
@@ -70,6 +72,9 @@ test('signup, quiz, quests, receipts, leaderboard, vouchers', async () => {
   r = await call('POST', '/quiz', { answers: Array(10).fill(0) }, token);
   assert.equal(r.body.progress.initialSelfDeclaredEP, 2500);
   assert.equal(r.body.progress.verifiedCO2SavedKg, 0);
+  // Fix this scenario's assignment; personalization itself has separate coverage.
+  db.prepare('UPDATE daily_assignments SET quest_ids = ? WHERE user_id = 1')
+    .run(JSON.stringify(['d8', 'd9', 'd11', 'd5', 'd6', 'd1']));
 
   r = await call('POST', '/quests/d8/complete', { proof: { type: 'confirm' } }, token);
   assert.equal(r.status, 200);
@@ -87,13 +92,14 @@ test('signup, quiz, quests, receipts, leaderboard, vouchers', async () => {
   r = await call('POST', '/quests/d11/complete', { proof: { type: 'labels', labels: ['Food', 'Plate'], imageHash: hash(1) } }, token);
   assert.equal(r.status, 200);
 
-  // Receipt with 10 packages completes d5 (3) and d6 (10); the same image can't be reused.
-  r = await call('POST', '/receipts', { text: 'SGR voucher\n10 ambalaje', imageHash: hash(2) }, token);
+  // Receipt completes SGR thresholds and mystery; the fifth daily completion also unlocks w8a.
+  const receipt = 'SGR voucher\n10 ambalaje\n18-OCT-2026 08:22:45';
+  r = await call('POST', '/receipts', { text: receipt, imageHash: hash(2) }, token);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.awarded.sort(), ['d5', 'd6']);
+  assert.deepEqual(r.body.awarded.sort(), ['d5', 'd6', 'mystery', 'w8a']);
   assert.equal(r.body.progress.sgrReturned, 10);
   assert.deepEqual(r.body.progress.questProgress.d7, [10, 20]);
-  assert.equal((await call('POST', '/receipts', { text: 'SGR voucher\n10 ambalaje', imageHash: hash(2) }, token)).body.error, 'proof_already_used');
+  assert.equal((await call('POST', '/receipts', { text: receipt, imageHash: hash(2) }, token)).body.error, 'receipt_already_used');
 
   // Walking 1.0 km completes d1 and chain1.
   const pts = Array.from({ length: 31 }, (_, i) => ({ lat: 47.16 + i * 0.0003, lon: 27.58, t: Date.now() - (30 - i) * 20_000 }));

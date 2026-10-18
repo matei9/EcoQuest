@@ -23,6 +23,7 @@ export const quests = [
   Q('d13', 'daily', 25, 0.08, 'confirm'),
   M('d14', 'daily', 50, 0.75, 'transitKm', 5),
   Q('d15', 'daily', 100, 3.2, 'confirm'),
+  Q('d16', 'daily', 25, 0.1, 'confirm'),
 
   M('w1a', 'weekly', 100, 2.0, 'walkKm', 10),
   M('w1b', 'weekly', 200, 5.0, 'walkKm', 25),
@@ -41,6 +42,7 @@ export const quests = [
   M('w8a', 'weekly', 100, 0, 'dailyCount', 5),
   M('w8b', 'weekly', 350, 0, 'dailyCount', 12),
   M('w9', 'weekly', 200, 3.0, 'eventCount', 1),
+  Q('w10', 'weekly', 100, 0.3, 'confirm'),
 
   M('m1a', 'monthly', 300, 0, 'dailyCount', 20),
   M('m1b', 'monthly', 600, 0, 'dailyCount', 50),
@@ -61,7 +63,7 @@ export const quests = [
   M('chain1', 'daily', 25, 0.2, 'walkKm', 1),
   Q('chain2', 'daily', 25, 0.08, 'confirm', { requires: 'chain1' }),
   Q('chain3', 'daily', 50, 0.3, 'photo', { requires: 'chain2' }),
-  Q('mystery', 'daily', 50, 0.5, 'photo'),
+  M('mystery', 'daily', 50, 0.5, 'receiptCount', 1),
 ];
 
 export const questById = new Map(quests.map((q) => [q.id, q]));

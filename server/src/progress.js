@@ -1,5 +1,7 @@
 import { quests, questById } from './catalog.js';
 import { addDays, periodKey, periodStart, today } from './time.js';
+import { dailyQuestIds, canUseTransit, isTransitQuest } from './personalization.js';
+import { duelStats } from './duels.js';
 
 const metricQuests = quests.filter((q) => q.verification === 'metric');
 
@@ -15,6 +17,7 @@ export function metricValue(db, uid, metric, from) {
     case 'greenKm': return tripKm(['transit', 'cycle']);
     case 'transitTrips': return one(`SELECT COUNT(*) FROM trips WHERE user_id = ? AND day >= ? AND mode = 'transit'`, from);
     case 'transitDays': return one(`SELECT COUNT(DISTINCT day) FROM trips WHERE user_id = ? AND day >= ? AND mode = 'transit'`, from);
+    case 'receiptCount': return one('SELECT COUNT(*) FROM receipts WHERE user_id = ? AND day >= ?', from);
     case 'sgr': return one('SELECT COALESCE(SUM(count), 0) FROM receipts WHERE user_id = ? AND day >= ?', from);
     case 'eventCount': return one('SELECT COUNT(*) FROM checkins WHERE user_id = ? AND day >= ?', from);
     case 'dailyCount': return one(`SELECT COUNT(*) FROM completions WHERE user_id = ? AND day >= ? AND kind = 'daily'`, from);
@@ -43,15 +46,20 @@ export function award(db, uid, quest, day = today()) {
   if (r.changes === 0) return false;
   db.prepare('UPDATE users SET verified_ep = verified_ep + ?, co2 = co2 + ?, coins = coins + ? WHERE id = ?')
     .run(quest.ep, quest.co2, quest.coins, uid);
+  if (quest.ep > 0) db.prepare('INSERT INTO earned_points (user_id, points, earned_at) VALUES (?, ?, ?)').run(uid, quest.ep, Date.now());
   return true;
 }
 
 /** Completes every metric quest that reached its target; repeats because completions feed counters. */
 export function evaluate(db, uid, day = today()) {
   const awarded = [];
+  const assigned = dailyQuestIds(db, uid, day);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(uid);
   for (;;) {
     const ready = metricQuests.filter(
-      (q) => !isDone(db, uid, q, day) && metricValue(db, uid, q.metric, periodStart(q.kind, day)) >= q.target,
+      (q) => (!/^d\d+$/.test(q.id) || assigned.includes(q.id))
+        && (!isTransitQuest(q.id) || canUseTransit(user))
+        && !isDone(db, uid, q, day) && metricValue(db, uid, q.metric, periodStart(q.kind, day)) >= q.target,
     );
     if (ready.length === 0) return awarded;
     for (const q of ready) if (award(db, uid, q, day)) awarded.push(q.id);
@@ -74,6 +82,7 @@ export function me(db, uid, day = today()) {
     user: {
       id: u.id, email: u.email, name: u.name, city: u.city, school: u.school,
       teamId: u.team_id, refCode: u.ref_code,
+      locality: u.locality, publicTransport: !!u.public_transport,
     },
     progress: {
       quizDone: !!u.quiz_done,
@@ -83,6 +92,8 @@ export function me(db, uid, day = today()) {
       verifiedCO2SavedKg: u.co2,
       ecoCoins: u.coins,
       sgrReturned: u.sgr,
+      dailyQuestIds: dailyQuestIds(db, uid, day),
+      duelStats: duelStats(db, uid),
       completedKeys,
       activeDays,
       questProgress,
