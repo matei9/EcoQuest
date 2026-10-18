@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keep the Green Guardians palette regardless of the phone's wallpaper. -->
+    <color name="gg_icon_bg">#C8E6C9</color>
+    <color name="gg_icon_shield">#2E7D32</color>
+    <color name="gg_icon_leaf">#C8E6C9</color>
+</resources>
