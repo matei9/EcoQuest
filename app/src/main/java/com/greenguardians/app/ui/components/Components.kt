@@ -47,14 +47,14 @@ fun LangDarkToggles(vm: MainViewModel) {
     }
 }
 
-/** Dark card with the 8 leagues in a 4x2 grid; current league glows. */
+/** Theme-aware card with the 8 leagues in a 4x2 grid; current league glows. */
 @Composable
 fun LeaguesShowcaseCard(current: League, modifier: Modifier = Modifier) {
     Card(
         modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0B0F14)),
-        border = BorderStroke(1.dp, Color(0xFF263040)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             League.entries.chunked(4).forEach { row ->
@@ -62,8 +62,8 @@ fun LeaguesShowcaseCard(current: League, modifier: Modifier = Modifier) {
                     row.forEach { l ->
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             LeagueIcon(l, 58.dp, glow = l == current)
-                            Text(l.displayName, color = l.color, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text("${fmt(l.minEP)}+ EP", color = Color(0xFF9AA4B2), fontSize = 10.sp)
+                            Text(l.displayName, color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text("${fmt(l.minEP)}+ EP", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                         }
                     }
                 }
