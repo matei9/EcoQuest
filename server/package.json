@@ -16,5 +16,6 @@
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
     "jsonwebtoken": "^9.0.2"
-  }
+  },
+  "license": "GPL-3.0-only"
 }
