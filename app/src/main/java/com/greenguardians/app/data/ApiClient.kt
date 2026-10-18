@@ -28,6 +28,28 @@ class ApiClient(private val baseUrl: String, private val token: () -> String?) {
     suspend fun getArray(path: String): JSONArray = JSONArray(raw("GET", path, null, 15_000))
 
     suspend fun get(path: String) = call("GET", path)
+    suspend fun uploadReceipt(image: ByteArray, count: Int?): JSONObject = withContext(Dispatchers.IO) {
+        val path = "/api/receipts" + if (count == null) "" else "?count=$count"
+        val conn = URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 100_000
+            conn.doOutput = true
+            conn.setFixedLengthStreamingMode(image.size)
+            conn.setRequestProperty("Content-Type", "image/jpeg")
+            conn.setRequestProperty("Accept", "application/json")
+            token()?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+            conn.outputStream.use { it.write(image) }
+            val status = conn.responseCode
+            if (status >= 400) throw httpError(conn, status)
+            JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+        } catch (e: IOException) {
+            throw networkError(e)
+        } finally {
+            conn.disconnect()
+        }
+    }
     suspend fun post(path: String, body: JSONObject = JSONObject(), timeoutMs: Int = 15_000) = call("POST", path, body, timeoutMs)
 
     /** Server-Sent Events: emits each `data: {...}` JSON as soon as its line arrives. */
@@ -87,6 +109,7 @@ class ApiClient(private val baseUrl: String, private val token: () -> String?) {
     private fun httpError(conn: HttpURLConnection, status: Int): ApiException {
         val text = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
         val code = runCatching { JSONObject(text).getString("error") }.getOrDefault("http_$status")
+        android.util.Log.w("ApiClient", "HTTP $status ${conn.requestMethod} ${conn.url.path}: $code")
         return ApiException(code, status)
     }
 }

@@ -24,8 +24,46 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
-/** On-device ML Kit + location helpers. Only results (text, labels, hashes, points) go to the server. */
+/** ML Kit and location helpers; SGR photos are prepared here and read by server OCR. */
 object OnDevice {
+    /** Normalize orientation and bound upload size. The server performs receipt OCR. */
+    suspend fun receiptImage(ctx: Context, uri: Uri): ByteArray = withContext(Dispatchers.IO) {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ctx.contentResolver.openInputStream(uri).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw ApiException("receipt_image_invalid", 0)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 4096) sample *= 2
+        val bitmap = ctx.contentResolver.openInputStream(uri).use {
+            android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: throw ApiException("receipt_image_invalid", 0)
+        var upright = bitmap
+        try {
+            val orientation = runCatching { ctx.contentResolver.openInputStream(uri).use {
+                android.media.ExifInterface(it!!).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)
+            } }.getOrDefault(1)
+            val matrix = android.graphics.Matrix().apply {
+                when (orientation) {
+                    2 -> setScale(-1f, 1f)
+                    3 -> setRotate(180f)
+                    4 -> setScale(1f, -1f)
+                    5 -> { setRotate(90f); postScale(-1f, 1f) }
+                    6 -> setRotate(90f)
+                    7 -> { setRotate(270f); postScale(-1f, 1f) }
+                    8 -> setRotate(270f)
+                }
+            }
+            if (!matrix.isIdentity) upright = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            java.io.ByteArrayOutputStream().use { out ->
+                upright.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                if (out.size() > 12 * 1024 * 1024) throw ApiException("too_large", 0)
+                out.toByteArray()
+            }
+        } finally {
+            if (upright !== bitmap) upright.recycle()
+            bitmap.recycle()
+        }
+    }
+
     suspend fun ocr(ctx: Context, uri: Uri): String =
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
             .process(InputImage.fromFilePath(ctx, uri)).await().text
@@ -60,7 +98,7 @@ object OnDevice {
 
     /**
      * GPS fixes every ~5 s while collected.
-     * shortcut: stops when the screen closes; needs a foreground service for background tracking.
+     * Collected by TripTrackingService so closing a quest does not stop recording.
      */
     @SuppressLint("MissingPermission")
     fun track(ctx: Context): Flow<Location> = callbackFlow {
@@ -74,6 +112,7 @@ object OnDevice {
             }
         }
         client.requestLocationUpdates(request, callback, Looper.getMainLooper())
+            .addOnFailureListener { close(it) }
         awaitClose { client.removeLocationUpdates(callback) }
     }
 }

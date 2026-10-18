@@ -28,6 +28,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,37 +49,55 @@ import com.greenguardians.app.viewmodel.MainViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.TemporalAdjusters
+import kotlinx.coroutines.delay
 
 @Composable
 fun MissionsScreen(vm: MainViewModel, p: UserProgress, onOpenTrivia: () -> Unit) {
-    val today = remember { LocalDate.now() }
+    var today by remember { mutableStateOf(LocalDate.now()) }
     var tab by remember { mutableStateOf(QuestKind.DAILY) }
     var verifying by remember { mutableStateOf<Quest?>(null) }
     val keys = p.completedKeys
     val chain = QuestRepository.chain
     val chainDone = chain.map { QuestRepository.isDone(it, keys, today) }
     val nextChain = chainDone.indexOfFirst { !it }
-    val city = vm.session.collectAsStateWithLifecycle().value.me?.user?.city ?: "Iași"
+    val user = vm.session.collectAsStateWithLifecycle().value.me?.user
+    val transitAvailable = user?.locality == "urban" && user.publicTransport && user.city == "Iași"
+    val transitIds = setOf("d4", "d14", "w2a", "w2b", "w2c", "m4")
+    val visibleQuests = QuestRepository.byKind(tab).filter { q ->
+        (tab != QuestKind.DAILY || q.id in p.dailyQuestIds) && (transitAvailable || q.id !in transitIds)
+    }
     val community by rememberApi(p.verifiedQuestEP) { vm.api.get("/api/community") }
+    val receiptQuest = QuestRepository.daily.first { it.sgr > 0 }
 
     val fact by vm.fact.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { if (vm.fact.value == null) vm.nextFact() }
+    LaunchedEffect(Unit) {
+        vm.refresh()
+        while (true) {
+            delay(60_000)
+            val day = LocalDate.now()
+            if (day != today) {
+                today = day
+                vm.refresh()
+            }
+        }
+    }
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { FunFactCard(fact, onNext = vm::nextFact, onOpenTrivia = onOpenTrivia) }
         item { StreakWidget(p.activeDays, today) }
-        item { BossBattleCard(bossKm(community), onContribute = { tab = QuestKind.DAILY }) }
-
-        val rec = QuestRepository.recommended(p, today)
-        if (rec.isNotEmpty()) {
-            item {
-                SectionCard(L("🤖 Misiuni AI personalizate", "🤖 AI personalized quests"), L(
-                    "Alese după potențialul tău de îmbunătățire și orașul tău ($city): reducere și reutilizare, nu cumpărături.",
-                    "Picked from your improvement potential and your city ($city): reduce and reuse, not shop.",
-                ))
+        item {
+            Card {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(L("🧾 Bonuri SGR", "🧾 SGR receipts").t(), fontWeight = FontWeight.Bold)
+                    Text(L("Scanează bonul de returnare. Ambalajele se adună la progresul misiunilor SGR.", "Scan your return receipt. Packages count toward your SGR quests.").t())
+                    Button(onClick = { verifying = receiptQuest }) {
+                        Text(L("Scanează bon SGR", "Scan SGR receipt").t())
+                    }
+                }
             }
-            items(rec, key = { "rec" + it.id }) { QuestCard(it, p, today) { verifying = it } }
         }
+        item { BossBattleCard(bossKm(community), onContribute = { tab = QuestKind.DAILY }) }
 
         item {
             SectionCard(L("🔗 Lanț de misiuni", "🔗 Quest chain"), L(
@@ -105,11 +124,21 @@ fun MissionsScreen(vm: MainViewModel, p: UserProgress, onOpenTrivia: () -> Unit)
                 }
             }
         }
-        items(QuestRepository.byKind(tab), key = { it.id }) { q -> QuestCard(q, p, today) { verifying = q } }
+        if (tab == QuestKind.DAILY) item {
+            SectionCard(L("Misiunile tale de azi", "Your quests today"), L(
+                "Șase misiuni alese după răspunsurile tale și localitate. Se schimbă zilnic, nu la fiecare deschidere.",
+                "Six quests based on your answers and locality. They change daily, not every time you open the app.",
+            ))
+            if (p.dailyQuestIds.isEmpty()) Text(L("Actualizează backendul și reîncarcă profilul pentru misiunile personalizate.", "Update the backend and refresh your profile for personalized quests.").t())
+            OutlinedButton(onClick = vm::refresh) { Text(L("Actualizează misiunile", "Refresh quests").t()) }
+        }
+        items(visibleQuests, key = { it.id }) { q -> QuestCard(q, p, today) { verifying = q } }
     }
 
     verifying?.let { q ->
-        VerifySheet(vm, q, p, onDismiss = { verifying = null })
+        key(q.id) {
+            VerifySheet(vm, q, p, onDismiss = { verifying = null })
+        }
     }
 }
 

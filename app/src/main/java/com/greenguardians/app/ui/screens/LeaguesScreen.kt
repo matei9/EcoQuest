@@ -40,6 +40,7 @@ import com.greenguardians.app.model.Me
 import com.greenguardians.app.ui.ErrorLine
 import com.greenguardians.app.ui.components.BossBattleCard
 import com.greenguardians.app.ui.components.FriendsCard
+import com.greenguardians.app.ui.components.DuelsCard
 import com.greenguardians.app.ui.components.LeagueIcon
 import com.greenguardians.app.ui.components.LeagueProgress
 import com.greenguardians.app.ui.components.LeaguesShowcaseCard
@@ -61,7 +62,7 @@ fun LeaguesScreen(vm: MainViewModel, me: Me, onGoMissions: () -> Unit) {
     // together with the previous tab's response.
     val selectedTab = tab
     val selectedVerifiedOnly = verifiedOnly
-    val titles = listOf(L("👤 Individual", "👤 Individual"), L("🤝 Echipe", "🤝 Teams"), L("🎓 Școli", "🎓 Schools"), L("🏙️ Orașe", "🏙️ Cities"))
+    val titles = listOf(L("👤 Individual", "👤 Individual"), L("🤝 Echipe", "🤝 Teams"), L("🎓 Școli", "🎓 Schools"), L("🏙️ Orașe", "🏙️ Cities"), L("⚔️ 1v1", "⚔️ 1v1"))
     val community by rememberApi(p.verifiedQuestEP) { vm.api.get("/api/community") }
     // Each tab loads from the server; keys refresh it after progress or team changes.
     val data by rememberApi(selectedTab, selectedVerifiedOnly, p.verifiedQuestEP, me.user.teamId, reload) {
@@ -88,6 +89,7 @@ fun LeaguesScreen(vm: MainViewModel, me: Me, onGoMissions: () -> Unit) {
             r.isFailure -> item { ErrorLine(r.exceptionOrNull()!!) }
             selectedTab == 0 -> individual(r.getOrThrow(), selectedVerifiedOnly) { verifiedOnly = it }
             selectedTab == 1 -> teamsTab(vm, me, r.getOrThrow()) { reload++ }
+            selectedTab == 4 -> item { DuelsCard(vm) }
             else -> rankings(vm, selectedTab)
         }
     }

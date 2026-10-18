@@ -49,6 +49,8 @@ fun QuizScreen(vm: MainViewModel) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
+    var locality by remember { mutableStateOf(vm.session.value.me?.user?.locality ?: "urban") }
+    var publicTransport by remember { mutableStateOf(vm.session.value.me?.user?.publicTransport ?: false) }
 
     Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -75,6 +77,21 @@ fun QuizScreen(vm: MainViewModel) {
                             },
                             Modifier.fillMaxWidth(),
                         ) { Text(opt.text.t()) }
+                    }
+                }
+            } else if (i < questions.size + 2) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(L("Misiuni potrivite pentru tine", "Quests that suit you").t(), style = MaterialTheme.typography.titleLarge)
+                    if (i == questions.size) {
+                        Text(L("Unde locuiești?", "Where do you live?").t())
+                        listOf("urban" to L("Oraș / municipiu", "City / town"), "rural" to L("Sat / comună", "Village / rural commune")).forEach { (value, label) ->
+                            OutlinedButton(onClick = { locality = value; index++ }, modifier = Modifier.fillMaxWidth()) { Text(label.t()) }
+                        }
+                    } else {
+                        Text(L("Ai acces practic la transport public pentru deplasările zilnice?", "Is public transport practical for your daily trips?").t())
+                        listOf(true to L("Da", "Yes"), false to L("Nu / foarte rar", "No / very rarely")).forEach { (value, label) ->
+                            OutlinedButton(onClick = { publicTransport = value; index++ }, modifier = Modifier.fillMaxWidth()) { Text(label.t()) }
+                        }
                     }
                 }
             } else {
@@ -106,7 +123,7 @@ fun QuizScreen(vm: MainViewModel) {
                             busy = true
                             error = null
                             scope.launch {
-                                runCatching { vm.submitQuiz(answers.toList()) }.onFailure { error = it }
+                                runCatching { vm.submitQuiz(answers.toList(), locality, publicTransport) }.onFailure { error = it }
                                 busy = false
                             }
                         },

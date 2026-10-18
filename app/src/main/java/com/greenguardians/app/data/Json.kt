@@ -26,6 +26,8 @@ object Json {
                 school = u.optStr("school"),
                 teamId = if (u.isNull("teamId")) null else u.getInt("teamId"),
                 refCode = u.getString("refCode"),
+                locality = u.optString("locality", "urban"),
+                publicTransport = u.optBoolean("publicTransport"),
             ),
             progress = UserProgress(
                 quizDone = p.getBoolean("quizDone"),
@@ -35,6 +37,11 @@ object Json {
                 verifiedCO2SavedKg = p.getDouble("verifiedCO2SavedKg"),
                 ecoCoins = p.getInt("ecoCoins"),
                 sgrReturned = p.getInt("sgrReturned"),
+                dailyQuestIds = p.optJSONArray("dailyQuestIds")?.strings() ?: emptyList(),
+                rankedWins = p.optJSONObject("duelStats")?.optInt("wins") ?: 0,
+                rankedPlayed = p.optJSONObject("duelStats")?.optInt("played") ?: 0,
+                rankedDraws = p.optJSONObject("duelStats")?.optInt("draws") ?: 0,
+                duelPoints = p.optJSONObject("duelStats")?.optInt("points") ?: 0,
                 completedKeys = p.getJSONArray("completedKeys").strings().toSet(),
                 activeDays = p.getJSONArray("activeDays").strings().toSet(),
                 questProgress = qp.keys().asSequence().associateWith {

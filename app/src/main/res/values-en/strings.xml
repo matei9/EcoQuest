@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Green Guardians</string>
+    <string name="trip_channel">GPS trip</string>
+    <string name="trip_recording">Green Guardians is recording your trip</string>
+    <string name="trip_distance">Distance: %1$.2f km · Open the quest to submit</string>
+    <string name="trip_stop_save">Stop and keep trip</string>
 
     <string name="nav_missions">Quests</string>
     <string name="nav_ai">AI Eco</string>

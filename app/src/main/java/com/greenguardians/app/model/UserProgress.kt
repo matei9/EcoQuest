@@ -24,6 +24,11 @@ data class UserProgress(
     val verifiedCO2SavedKg: Double = 0.0,
     val ecoCoins: Int = 0,
     val sgrReturned: Int = 0,
+    val dailyQuestIds: List<String> = emptyList(),
+    val rankedWins: Int = 0,
+    val rankedPlayed: Int = 0,
+    val rankedDraws: Int = 0,
+    val duelPoints: Int = 0,
     /** "questId@yyyy-MM-dd" for each completion. */
     val completedKeys: Set<String> = emptySet(),
     /** ISO dates with at least one completed quest (flexible 5-of-7 streak). */

@@ -59,8 +59,11 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.3")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
 
-    // On-device verification (no server AI): OCR for receipts/bills, image labels for photos, QR for events.
+    // On-device bill/document OCR, photo labels and event QR; SGR receipt OCR runs on the server.
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:image-labeling:17.0.9")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")

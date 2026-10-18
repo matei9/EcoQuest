@@ -138,6 +138,12 @@ fun FriendsCard(vm: MainViewModel, me: Me, changed: () -> Unit) {
                     if (friends.isEmpty()) Text(L("Nu ai încă prieteni. Trimite codul tău unei persoane care are cont.", "No friends yet. Share your code with someone who has an account.").t())
                     friends.forEach { friend ->
                         Text("${friend.getString("name")} · ${friend.getString("city")}", style = MaterialTheme.typography.titleSmall)
+                        OutlinedButton(enabled = !busy, onClick = {
+                            act {
+                                vm.api.post("/api/duels/friends", JSONObject().put("userId", friend.getInt("id")))
+                                notice = L("Invitație 1v1 amical trimisă. Acceptarea și scorul apar în Ligi → 1v1.", "Friendly 1v1 invitation sent. Accept and view scores in Leagues → 1v1.")
+                            }
+                        }) { Text(L("Provoacă la 1v1 amical", "Challenge to friendly 1v1").t()) }
                         if (me.user.teamId != null && friend.isNull("teamId")) {
                             OutlinedButton(enabled = !busy && friend.getInt("id") !in sent, onClick = {
                                 act {

@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Green Guardians</string>
+    <string name="trip_channel">Traseu GPS</string>
+    <string name="trip_recording">Green Guardians înregistrează traseul</string>
+    <string name="trip_distance">Distanță: %1$.2f km · Revino în misiune pentru trimitere</string>
+    <string name="trip_stop_save">Oprește și păstrează</string>
 
     <string name="nav_missions">Misiuni</string>
     <string name="nav_ai">AI Eco</string>

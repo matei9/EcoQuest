@@ -8,6 +8,8 @@ data class UserInfo(
     val school: String?,
     val teamId: Int?,
     val refCode: String,
+    val locality: String = "urban",
+    val publicTransport: Boolean = false,
 )
 
 data class Me(val user: UserInfo, val progress: UserProgress)

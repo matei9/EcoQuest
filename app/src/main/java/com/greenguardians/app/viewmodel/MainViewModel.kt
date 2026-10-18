@@ -1,6 +1,9 @@
 package com.greenguardians.app.viewmodel
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.AndroidViewModel
@@ -10,6 +13,9 @@ import com.greenguardians.app.data.ApiClient
 import com.greenguardians.app.data.ApiException
 import com.greenguardians.app.data.Json
 import com.greenguardians.app.data.PrefsRepository
+import com.greenguardians.app.data.OnDevice
+import com.greenguardians.app.data.TripStore
+import com.greenguardians.app.data.TripTrackingService
 import com.greenguardians.app.model.AppConfig
 import com.greenguardians.app.model.Session
 import com.greenguardians.app.model.UserProgress
@@ -18,9 +24,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -29,6 +37,8 @@ data class Boarding(val token: String, val routeName: String)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = PrefsRepository(app)
+    private val trips = TripStore.get(app)
+    val trip = trips.state
 
     val session: StateFlow<Session> = repo.session.stateIn(viewModelScope, SharingStarted.Eagerly, Session())
     val progress: StateFlow<UserProgress> =
@@ -50,6 +60,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val api = ApiClient(BuildConfig.API_URL) { session.value.token }
 
     init {
+        viewModelScope.launch {
+            session.map { if (it.loaded) it.me?.user?.id ?: 0 else null }.distinctUntilChanged().collect { owner ->
+                if (owner != null && owner != trip.value.ownerId) {
+                    stopTrip()
+                    trips.bindOwner(owner)
+                }
+            }
+        }
         viewModelScope.launch {
             session.first { it.loaded }
             runCatching { config.value = Json.config(api.get("/api/config")) }
@@ -98,16 +116,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun logout() {
+        discardTrip()
         viewModelScope.launch { repo.clearSession() }
     }
 
     suspend fun deleteAccount() {
         api.call("DELETE", "/api/me")
+        discardTrip()
         repo.clearSession()
     }
 
-    suspend fun submitQuiz(answers: List<Int>) {
-        mutate("POST", "/api/quiz", JSONObject().put("answers", JSONArray(answers)))
+    suspend fun submitQuiz(answers: List<Int>, locality: String, publicTransport: Boolean) {
+        mutate("POST", "/api/quiz", JSONObject().put("answers", JSONArray(answers))
+            .put("locality", locality).put("publicTransport", publicTransport))
         retakeQuiz.value = false
     }
 
@@ -115,11 +136,71 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun completeQuest(id: String, proof: JSONObject): List<String> =
         awarded(mutate("POST", "/api/quests/$id/complete", JSONObject().put("proof", proof)))
 
-    suspend fun submitReceipt(text: String, imageHash: String): List<String> =
-        awarded(mutate("POST", "/api/receipts", JSONObject().put("text", text).put("imageHash", imageHash)))
+    data class ReceiptSubmission(val awarded: List<String>, val count: Int, val day: String, val time: String)
 
-    suspend fun submitTrack(mode: String, points: JSONArray): List<String> =
-        awarded(mutate("POST", "/api/trips", JSONObject().put("mode", mode).put("points", points)))
+    suspend fun submitReceipt(uri: Uri, count: Int? = null): ReceiptSubmission {
+        val serverConfig = api.get("/api/config")
+        if (serverConfig.optString("receiptOcr") != "server-v1" || serverConfig.optString("receiptValidation") != "datetime-v2") {
+            throw ApiException("receipt_server_outdated", 426)
+        }
+        try {
+            val r = api.uploadReceipt(OnDevice.receiptImage(getApplication(), uri), count)
+            repo.saveMe(r.toString())
+            return ReceiptSubmission(awarded(r), r.optInt("count"), r.optString("receiptDay"), r.optString("receiptTime"))
+        } catch (e: ApiException) {
+            if (e.status == 401) repo.clearSession()
+            throw e
+        }
+    }
+
+    fun startTrip(mode: String) {
+        val owner = session.value.me?.user?.id ?: return
+        if (trip.value.ownerId != owner) stopTrip()
+        trips.bindOwner(owner)
+        if (trip.value.hasDraft || trip.value.submitting) return
+        val id = trips.begin(mode)
+        try {
+            ContextCompat.startForegroundService(getApplication(), Intent(getApplication(), TripTrackingService::class.java).putExtra("tripId", id))
+        } catch (e: Exception) {
+            trips.pause("gps_failed")
+        }
+    }
+
+    fun stopTrip() {
+        trips.pause()
+        getApplication<Application>().stopService(Intent(getApplication(), TripTrackingService::class.java))
+    }
+
+    fun discardTrip() {
+        if (trip.value.submitting) return
+        stopTrip()
+        trips.clear()
+    }
+
+    suspend fun submitSavedTrip(): List<String> {
+        check(!trip.value.submitting)
+        stopTrip()
+        val saved = trip.value
+        check(saved.hasDraft && saved.ownerId == session.value.me?.user?.id)
+        val token = session.value.token ?: error("No active session")
+        trips.setSubmitting(true)
+        // Sending survives sheet dismissal. A stable clientId also makes retry safe after process death.
+        return viewModelScope.async {
+            try {
+                val client = ApiClient(BuildConfig.API_URL) { token }
+                val r = client.post("/api/trips", JSONObject().put("mode", saved.mode)
+                    .put("points", saved.payload()).put("clientId", saved.id))
+                if (session.value.token == token) repo.saveMe(r.toString())
+                trips.clear(saved.id, saved.ownerId)
+                awarded(r)
+            } catch (e: ApiException) {
+                if (e.status == 401 && session.value.token == token) repo.clearSession()
+                throw e
+            } finally {
+                if (trip.value.id == saved.id) trips.setSubmitting(false)
+            }
+        }.await()
+    }
 
     suspend fun nearbyRoutes(lat: Double, lon: Double): JSONObject =
         api.post("/api/transit/nearby", JSONObject().put("lat", lat).put("lon", lon))

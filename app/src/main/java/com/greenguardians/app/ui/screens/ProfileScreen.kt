@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ private val badges = listOf(
 
 @Composable
 fun ProfileScreen(vm: MainViewModel, me: Me) {
+    LaunchedEffect(Unit) { vm.refresh() }
     val p = me.progress
     val u = me.user
     val ids = p.completedKeys.map { it.substringBefore("@") }.toSet()
@@ -82,6 +84,16 @@ fun ProfileScreen(vm: MainViewModel, me: Me) {
         }
         item { LeaguesShowcaseCard(p.league) }
         item { LeagueProgress(p) }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(L("⚔️ 1v1 clasat", "⚔️ Ranked 1v1").t(), fontWeight = FontWeight.Bold)
+                    Text(L("${p.rankedWins} victorii · ${p.rankedDraws} egalități · ${p.rankedPlayed} meciuri", "${p.rankedWins} wins · ${p.rankedDraws} draws · ${p.rankedPlayed} matches").t())
+                    Text(L("${p.duelPoints} puncte 1v1", "${p.duelPoints} 1v1 points").t())
+                    Text(L("3 puncte/victorie, 1/egalitate. Amicalele cu prietenii nu se includ. Punctele 1v1 sunt separate de EcoPoints.", "3 points/win, 1/draw. Friendly matches are excluded. 1v1 points are separate from EcoPoints.").t(), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -113,6 +125,7 @@ fun ProfileScreen(vm: MainViewModel, me: Me) {
                 fontWeight = FontWeight.SemiBold,
             )
             OutlinedButton(onClick = { vm.retakeQuiz.value = true }) { Text(L("Refă quiz-ul", "Retake quiz").t()) }
+            Text(L("Aici poți schimba și oraș/sat și accesul la transport. Noile răspunsuri se aplică selecției de mâine; misiunile de transport indisponibil se înlocuiesc imediat.", "You can also update city/village and transport access here. New answers apply to tomorrow's selection; unavailable transport quests are replaced immediately.").t(), style = MaterialTheme.typography.bodySmall)
         }
         item { Text(L("Badge-uri", "Badges").t(), fontWeight = FontWeight.Bold) }
         items(badges) { b ->

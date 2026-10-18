@@ -61,6 +61,7 @@ object QuestRepository {
         q("d13", DAILY, "Folosește o sacoșă reutilizabilă la cumpărături", "Use a reusable shopping bag", EASY, 25, CONFIRM, 0.08, REUSE),
         q("d14", DAILY, "Înlocuiește o deplasare auto de minimum 5 km cu transport public", "Replace a 5+ km car trip with public transport", MEDIUM, 50, GPS, 0.75, TRANSPORT, km = 5.0),
         q("d15", DAILY, "Petrece o zi fără deplasări cu mașina pe care le-ai fi făcut în mod normal", "Spend a car-free day", HARD, 100, JOURNAL, 3.20, TRANSPORT),
+        q("d16", DAILY, "Mergi la piața locală și alege produse de la producători din comunitate", "Visit the local market and choose community producers", EASY, 25, CONFIRM, 0.10, COMMUNITY),
     )
 
     val weekly = listOf(
@@ -81,6 +82,7 @@ object QuestRepository {
         q("w8a", WEEKLY, "Realizează 5 misiuni zilnice în 7 zile", "Complete 5 daily quests in 7 days", EASY, 100, AUTO, 0.0, PROGRESS, autoOf = DAILY, autoTarget = 5),
         q("w8b", WEEKLY, "Realizează 12 misiuni zilnice într-o săptămână", "Complete 12 daily quests in a week", HARD, 350, AUTO, 0.0, PROGRESS, autoOf = DAILY, autoTarget = 12),
         q("w9", WEEKLY, "Participă la o activitate organizată de curățenie în comunitate", "Join an organized community clean-up", MEDIUM, 200, QR_PHOTO, 3.00, COMMUNITY),
+        q("w10", WEEKLY, "Mergi la piața locală cu un prieten sau un vecin și susține producătorii locali", "Visit the local market with a friend or neighbor and support local producers", EASY, 100, CONFIRM, 0.30, COMMUNITY),
     )
 
     val monthly = listOf(
@@ -109,8 +111,8 @@ object QuestRepository {
     )
 
     val mystery = q(
-        "mystery", DAILY, "Misiune misterioasă: fotografiază cel mai apropiat punct de colectare SGR",
-        "Mystery quest: photograph the nearest SGR collection point", MEDIUM, 50, PHOTO_AI, 0.50, SGR,
+        "mystery", DAILY, "Misiune misterioasă: verifică un bon SGR",
+        "Mystery quest: verify an SGR receipt", MEDIUM, 50, RECEIPT_AI, 0.50, SGR, sgr = 1,
     )
 
     private val all = daily + weekly + monthly + chain + mystery

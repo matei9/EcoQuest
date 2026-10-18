@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
+import android.os.Build
+import android.app.Activity
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,21 +30,23 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +54,7 @@ import com.greenguardians.app.data.ApiException
 import com.greenguardians.app.data.Json
 import com.greenguardians.app.data.OnDevice
 import com.greenguardians.app.data.QuestRepository
+import com.greenguardians.app.data.TripState
 import com.greenguardians.app.model.L
 import com.greenguardians.app.model.League
 import com.greenguardians.app.model.Quest
@@ -56,8 +63,10 @@ import com.greenguardians.app.model.Verification
 import com.greenguardians.app.ui.ErrorLine
 import com.greenguardians.app.ui.t
 import com.greenguardians.app.viewmodel.MainViewModel
+import com.greenguardians.app.ProofCameraActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -74,17 +83,25 @@ fun VerifySheet(vm: MainViewModel, quest: Quest, p: UserProgress, onDismiss: () 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
     var awarded by remember { mutableStateOf<List<String>?>(null) }
+    var receipt by remember { mutableStateOf<MainViewModel.ReceiptSubmission?>(null) }
     val submit: Runner = { block ->
         busy = true
         error = null
         scope.launch {
-            runCatching { block() }.onSuccess { awarded = it }.onFailure { error = it }
-            busy = false
+            try {
+                awarded = block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e
+            } finally {
+                busy = false
+            }
         }
     }
     val complete: suspend (JSONObject) -> List<String> = { proof -> vm.completeQuest(quest.id, proof) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -94,6 +111,11 @@ fun VerifySheet(vm: MainViewModel, quest: Quest, p: UserProgress, onDismiss: () 
 
             val done = awarded
             if (done != null) {
+                receipt?.let { r ->
+                    Text(L("✔ Bon acceptat: ${r.day} ${r.time}", "✔ Receipt accepted: ${r.day} ${r.time}").t(), fontWeight = FontWeight.Bold)
+                    Text(if (r.count > 0) L("${r.count} ambalaje adăugate la progres.", "${r.count} packages added to progress.").t()
+                        else L("Numărul de ambalaje nu a fost citit sau completat; bonul este valid, dar nu s-au adăugat ambalaje la progres.", "The package count was not read or entered; the receipt is valid, but no packages were added to progress.").t())
+                }
                 RewardSummary(done, epBefore)
                 OutlinedButton(onClick = onDismiss, Modifier.fillMaxWidth()) { Text("OK") }
                 return@Column
@@ -101,15 +123,36 @@ fun VerifySheet(vm: MainViewModel, quest: Quest, p: UserProgress, onDismiss: () 
 
             when (quest.verification) {
                 Verification.GPS -> TripProof(vm, quest, submit)
-                Verification.RECEIPT_AI, Verification.BILL -> ImagePicker(1, L("📷 Alege poza bonului / documentului", "📷 Pick the receipt / document photo")) { (u) ->
-                    submit {
-                        val text = OnDevice.ocr(ctx, u)
-                        val hash = OnDevice.sha256(ctx, u)
-                        if (quest.sgr > 0) vm.submitReceipt(text, hash)
-                        else complete(JSONObject().put("type", "ocr").put("text", text).put("imageHash", hash))
+                Verification.RECEIPT_AI, Verification.BILL -> {
+                    var packageCount by rememberSaveable(quest.id) { mutableStateOf("") }
+                    if (quest.sgr > 0) {
+                        Text(L("Fotografiază bonul întreg, inclusiv data și ora de jos. Verificăm doar data și ora valide, fără limită de vechime. Un bon acceptat nu poate fi refolosit. Ambalajele se adaugă la progres doar dacă numărul lor este citit sau completat mai jos.", "Include the whole receipt, especially the date and time at the bottom. Only a valid date and time are required, with no age limit. An accepted receipt cannot be reused. Packages count toward progress only when their quantity is read or entered below.").t())
+                        OutlinedTextField(
+                            value = packageCount,
+                            onValueChange = { packageCount = it.filter(Char::isDigit).take(3) },
+                            label = { Text(L("Ambalaje (opțional, dacă nu se citesc)", "Packages (optional, if unreadable)").t()) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    ImagePicker(1, L("Bon / document", "Receipt / document"), enabled = !busy) { (u) ->
+                        submit {
+                            if (quest.sgr > 0) {
+                                val result = vm.submitReceipt(u, packageCount.toIntOrNull())
+                                receipt = result
+                                result.awarded
+                            }
+                            else {
+                                val text = OnDevice.ocr(ctx, u)
+                                val hash = OnDevice.sha256(ctx, u)
+                                complete(JSONObject().put("type", "ocr").put("text", text).put("imageHash", hash))
+                            }
+                        }
                     }
                 }
-                Verification.PHOTO, Verification.PHOTO_AI -> ImagePicker(1, L("📷 Alege poza dovadă", "📷 Pick the proof photo")) { (u) ->
+                Verification.PHOTO, Verification.PHOTO_AI -> ImagePicker(1,
+                    L("📷 Alege poza dovadă", "📷 Pick the proof photo"), enabled = !busy) { (u) ->
                     submit {
                         complete(
                             JSONObject().put("type", "labels")
@@ -146,7 +189,8 @@ fun VerifySheet(vm: MainViewModel, quest: Quest, p: UserProgress, onDismiss: () 
             }
 
             if (busy) {
-                Text(L("Green Guardians analizează dovada pe telefon...", "Green Guardians is analyzing the proof on your phone...").t())
+                Text(if (quest.sgr > 0) L("Serverul citește bonul. Poate dura câteva secunde...", "The server is reading your receipt. This may take a few seconds...").t()
+                    else L("Green Guardians analizează dovada pe telefon...", "Green Guardians is analyzing the proof on your phone...").t())
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             error?.let { if ((it as? ApiException)?.code != "cancelled") ErrorLine(it) }
@@ -183,22 +227,44 @@ private fun RewardSummary(ids: List<String>, epBefore: Int) {
 }
 
 @Composable
-private fun ImagePicker(count: Int, label: L, onPicked: (List<Uri>) -> Unit) {
-    val uris = remember { mutableStateListOf<Uri>() }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+private fun ImagePicker(count: Int, label: L, enabled: Boolean = true, onPicked: (List<Uri>) -> Unit) {
+    val ctx = LocalContext.current
+    var uris by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var captureError by remember { mutableStateOf<Throwable?>(null) }
+    val accept: (Uri?) -> Unit = { uri ->
         if (uri != null) {
-            uris.add(uri)
-            if (uris.size == count) {
-                onPicked(uris.toList())
-                uris.clear()
+            val next = uris + uri.toString()
+            if (next.size == count) {
+                uris = emptyList()
+                onPicked(next.map(Uri::parse))
+            } else {
+                uris = next
             }
         }
     }
-    Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, Modifier.fillMaxWidth()) {
-        Text(label.t() + if (count > 1) " (${uris.size + 1}/$count)" else "")
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), accept)
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) accept(result.data?.data)
     }
+    Text(label.t() + if (count > 1) " (${uris.size + 1}/$count)" else "")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(enabled = enabled, onClick = {
+            captureError = null
+            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }) { Text(L("Galerie", "Gallery").t()) }
+        Button(enabled = enabled, onClick = {
+            captureError = null
+            try {
+                camera.launch(Intent(ctx, ProofCameraActivity::class.java))
+            } catch (e: Exception) {
+                android.util.Log.w("ProofCamera", "Camera launch failed", e)
+                captureError = ApiException("camera_unavailable", 0)
+            }
+        }) { Text(L("Fă o poză", "Take photo").t()) }
+    }
+    captureError?.let { ErrorLine(it) }
     Text(
-        L("Textul și etichetele sunt extrase pe telefon (ML Kit); imaginea nu e trimisă.", "Text and labels are extracted on the phone (ML Kit); the image is not uploaded.").t(),
+        L("Bonurile SGR sunt trimise serverului pentru citire și șterse după procesare. Celelalte dovezi sunt analizate pe telefon.", "SGR receipts are uploaded for reading and deleted after processing. Other proofs are analyzed on your phone.").t(),
         style = MaterialTheme.typography.bodySmall,
     )
 }
@@ -233,9 +299,12 @@ private fun hasLocation(ctx: android.content.Context) =
 private fun TripProof(vm: MainViewModel, quest: Quest, submit: Runner) {
     val ctx = LocalContext.current
     val en = quest.title.en.lowercase()
+    val trip by vm.trip.collectAsStateWithLifecycle()
+    val hasDraft = trip.hasDraft && trip.ownerId == vm.session.value.me?.user?.id
     var mode by remember {
         mutableStateOf(if ("cycl" in en) "cycle" else if ("public" in en || "transport" in en) "transit" else "walk")
     }
+    val selectedMode = if (hasDraft) trip.mode else mode
     var granted by remember { mutableStateOf(hasLocation(ctx)) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted = hasLocation(ctx) }
     if (!granted) {
@@ -246,37 +315,52 @@ private fun TripProof(vm: MainViewModel, quest: Quest, submit: Runner) {
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("walk" to L("🚶 Pe jos", "🚶 Walk"), "cycle" to L("🚲 Bicicletă", "🚲 Bike"), "transit" to L("🚋 CTP", "🚋 Transit"))
-            .forEach { (m, label) -> FilterChip(mode == m, { mode = m }, { Text(label.t()) }) }
+            .forEach { (m, label) -> FilterChip(selectedMode == m, { mode = m }, enabled = !hasDraft, label = { Text(label.t()) }) }
     }
-    if (mode == "transit") TransitFlow(vm, submit) else TrackFlow(vm, mode, submit)
+    if (selectedMode == "transit") TransitFlow(vm, submit) else TrackFlow(vm, selectedMode, submit)
 }
 
 @Composable
 private fun TrackFlow(vm: MainViewModel, mode: String, submit: Runner) {
     val ctx = LocalContext.current
-    var tracking by remember { mutableStateOf(false) }
-    val points = remember { mutableStateListOf<Location>() }
-    if (tracking) {
-        LaunchedEffect(Unit) { OnDevice.track(ctx).collect { points.add(it) } }
-    }
-    val km = points.zipWithNext { a, b -> a.distanceTo(b) }.sum() / 1000f
-    val minutes = if (points.size > 1) (points.last().time - points.first().time) / 60_000 else 0L
-    Text(L("Distanță: %.2f km · %d min".format(km, minutes), "Distance: %.2f km · %d min".format(km, minutes)).t(), fontWeight = FontWeight.SemiBold)
+    val storedTrip by vm.trip.collectAsStateWithLifecycle()
+    val trip = storedTrip.takeIf { it.ownerId == vm.session.value.me?.user?.id } ?: TripState()
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.startTrip(mode) }
+    Text(L("Distanță: %.2f km · %d min".format(trip.km, trip.minutes), "Distance: %.2f km · %d min".format(trip.km, trip.minutes)).t(), fontWeight = FontWeight.SemiBold)
     Text(
-        L("Ține aplicația deschisă pe durata traseului. Serverul respinge vitezele de mașină.", "Keep the app open during the trip. The server rejects car speeds.").t(),
+        if (trip.running) L("GPS activ. Poți închide misiunea sau bloca ecranul; traseul continuă în notificare.", "GPS active. You can close the quest or lock the screen; recording continues with a notification.").t()
+        else if (trip.hasDraft) L("Traseu păstrat pe telefon. Trimite-l pentru validare sau șterge-l pentru a începe altul.", "Trip saved on your phone. Submit it for validation or discard it to start another.").t()
+        else L("Pornește GPS pentru a înregistra traseul. Serverul respinge vitezele de mașină.", "Start GPS to record your trip. The server rejects car speeds.").t(),
         style = MaterialTheme.typography.bodySmall,
     )
-    Button(onClick = {
-        if (!tracking) {
-            points.clear()
-            tracking = true
-        } else {
-            tracking = false
-            val arr = JSONArray(points.map { JSONObject().put("lat", it.latitude).put("lon", it.longitude).put("t", it.time) })
-            submit { vm.submitTrack(mode, arr) }
+    trip.error?.let { ErrorLine(ApiException(it, 0)) }
+    if (!trip.hasDraft) {
+        Button(onClick = {
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else vm.startTrip(mode)
+        }, modifier = Modifier.fillMaxWidth()) { Text(L("▶ Pornește GPS", "▶ Start GPS").t()) }
+    } else {
+        if (trip.submitting) CircularProgressIndicator()
+        Button(enabled = !trip.submitting && trip.points.size >= 2, onClick = {
+            submit { vm.submitSavedTrip() }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (trip.running) L("⏹ Stop și trimite traseul", "⏹ Stop and submit trip").t() else L("Trimite traseul păstrat", "Submit saved trip").t())
         }
-    }, Modifier.fillMaxWidth()) {
-        Text(if (tracking) L("⏹ Stop și trimite traseul", "⏹ Stop and submit trip").t() else L("▶ Pornește GPS", "▶ Start GPS").t())
+        if (trip.running) OutlinedButton(enabled = !trip.submitting, onClick = { vm.stopTrip() }) {
+            Text(L("Oprește și păstrează", "Stop and keep trip").t())
+        }
+        TextButton(enabled = !trip.submitting, onClick = { confirmDiscard = true }) { Text(L("Șterge traseul", "Discard trip").t()) }
+    }
+    if (confirmDiscard) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text(L("Ștergi traseul?", "Discard trip?").t()) },
+            text = { Text(L("Distanța netrimisă va fi pierdută.", "The unsubmitted distance will be lost.").t()) },
+            confirmButton = { TextButton(onClick = { vm.discardTrip(); confirmDiscard = false }) { Text(L("Șterge", "Discard").t()) } },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(L("Anulează", "Cancel").t()) } },
+        )
     }
 }
 
